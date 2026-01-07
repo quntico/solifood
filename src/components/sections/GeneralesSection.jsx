@@ -32,7 +32,7 @@ const EditableText = ({ value, onSave, isEditorMode, className = '', tag: Tag = 
             onChange={(e) => setText(e.target.value)}
             className="w-full bg-gray-900 border border-primary rounded-md p-2 text-white focus:outline-none"
           />
-          <button onClick={handleSave} className="p-1.5 bg-green-600 text-white rounded-full hover:bg-green-700 disabled:bg-gray-500" disabled={isSaving}>
+          <button onClick={handleSave} className="p-1.5 bg-primary text-black rounded-full hover:bg-primary/80 disabled:bg-gray-500" disabled={isSaving}>
             {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
           </button>
           <button onClick={() => setIsEditing(false)} className="p-1.5 bg-red-600 text-white rounded-full hover:bg-red-700">
@@ -85,7 +85,7 @@ const EditableList = ({ items, onSave, isEditorMode }) => {
             className="w-full bg-gray-900 border border-primary rounded-md p-2 text-white resize-y focus:outline-none text-sm min-h-[100px]"
           />
           <div className="flex justify-end gap-2">
-            <button onClick={handleSave} className="p-1.5 bg-green-600 text-white rounded-full hover:bg-green-700 disabled:bg-gray-500" disabled={isSaving}>
+            <button onClick={handleSave} className="p-1.5 bg-primary text-black rounded-full hover:bg-primary/80 disabled:bg-gray-500" disabled={isSaving}>
               {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             </button>
             <button onClick={() => setIsEditing(false)} className="p-1.5 bg-red-600 text-white rounded-full hover:bg-red-700">

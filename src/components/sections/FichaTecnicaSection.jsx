@@ -283,7 +283,7 @@ const FichaTecnicaSection = ({ sectionData, quotationData, isEditorMode, onConte
     <div className="w-80 md:w-96 shrink-0 border-r border-gray-800 flex flex-col bg-[#0f0f0f]">
       <div className="p-4 border-b border-gray-800 flex justify-between items-center">
         <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Fichas Técnicas</span>
-        <Button size="sm" variant="ghost" onClick={handleAddFicha} className="h-7 text-primary hover:text-green-300 hover:bg-primary/20 text-xs">
+        <Button size="sm" variant="ghost" onClick={handleAddFicha} className="h-7 text-primary hover:text-primary hover:bg-primary/20 text-xs">
           <Plus size={12} className="mr-1" /> Ficha
         </Button>
       </div>
@@ -353,7 +353,7 @@ const FichaTecnicaSection = ({ sectionData, quotationData, isEditorMode, onConte
                       onClick={() => setActiveSelection({ type: 'category', index, category: 'technical_data' })}
                       className={cn(
                         "flex items-center gap-2 p-2 rounded-md cursor-pointer transition-all text-xs",
-                        activeSelection.type === 'category' && activeSelection.index === index && activeSelection.category === 'technical_data' ? "bg-primary/20 text-green-200 border border-primary/20" : "text-gray-500 hover:bg-gray-800 hover:text-gray-300"
+                        activeSelection.type === 'category' && activeSelection.index === index && activeSelection.category === 'technical_data' ? "bg-primary/20 text-primary border border-primary/20" : "text-gray-500 hover:bg-gray-800 hover:text-gray-300"
                       )}
                     >
                       <Database size={14} />
@@ -363,7 +363,7 @@ const FichaTecnicaSection = ({ sectionData, quotationData, isEditorMode, onConte
                       onClick={() => setActiveSelection({ type: 'category', index, category: 'components' })}
                       className={cn(
                         "flex items-center gap-2 p-2 rounded-md cursor-pointer transition-all text-xs",
-                        activeSelection.type === 'category' && activeSelection.index === index && activeSelection.category === 'components' ? "bg-primary/20 text-green-200 border border-primary/20" : "text-gray-500 hover:bg-gray-800 hover:text-gray-300"
+                        activeSelection.type === 'category' && activeSelection.index === index && activeSelection.category === 'components' ? "bg-primary/20 text-primary border border-primary/20" : "text-gray-500 hover:bg-gray-800 hover:text-gray-300"
                       )}
                     >
                       <Cpu size={14} />
@@ -483,7 +483,7 @@ const FichaTecnicaSection = ({ sectionData, quotationData, isEditorMode, onConte
         <div className="space-y-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              {category === 'technical_data' ? <Database className="text-green-500" /> : <Cpu className="text-orange-500" />}
+              {category === 'technical_data' ? <Database className="text-primary" /> : <Cpu className="text-orange-500" />}
               Editando: {category === 'technical_data' ? 'Datos Técnicos' : 'Componentes'}
             </h3>
             <Button size="sm" onClick={() => handleAddItem(fichaIndex, category)} className="bg-primary hover:bg-primary/80">
@@ -531,7 +531,7 @@ const FichaTecnicaSection = ({ sectionData, quotationData, isEditorMode, onConte
                       <Input
                         value={item.value}
                         onChange={(e) => handleUpdateItem(fichaIndex, category, idx, 'value', e.target.value)}
-                        className="h-8 bg-black/20 border-gray-700 font-mono text-green-300"
+                        className="h-8 bg-black/20 border-gray-700 font-mono text-primary"
                       />
                     </div>
                     {category === 'technical_data' && (
@@ -640,7 +640,7 @@ const FichaTecnicaSection = ({ sectionData, quotationData, isEditorMode, onConte
             {isModeAdmin && (
               <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" className="border-primary/50 bg-primary/10 text-primary hover:bg-primary/30 hover:text-green-300">
+                  <Button variant="outline" className="border-primary/50 bg-primary/10 text-primary hover:bg-primary/30 hover:text-primary">
                     <Edit className="w-4 h-4 mr-2" /> Editar Fichas
                   </Button>
                 </DialogTrigger>

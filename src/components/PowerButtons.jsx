@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 
 const PowerButton = ({ isActive, onClick, type }) => {
   const isGreen = type === 'on';
-  const colorClass = isGreen ? 'bg-green-500' : 'bg-red-500';
+  const colorClass = isGreen ? 'bg-primary' : 'bg-red-500';
   const activeClass = isGreen
     ? 'border-yellow-400 shadow-[0_0_8px_theme(colors.yellow.400)]'
     : 'border-white shadow-[0_0_8px_theme(colors.white)]';

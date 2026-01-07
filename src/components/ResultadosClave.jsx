@@ -5,7 +5,7 @@ import { BarChart, DollarSign, Package, TrendingUp, Clock } from 'lucide-react';
 const formatNumber = (num) => new Intl.NumberFormat('es-MX').format(num);
 
 const ResultadoItem = ({ icon, label, value, unit, bgColor }) => (
-  <motion.div 
+  <motion.div
     className={`p-4 rounded-lg flex items-center gap-4 ${bgColor}`}
     whileHover={{ scale: 1.05 }}
     transition={{ type: "spring", stiffness: 300 }}
@@ -29,7 +29,7 @@ const ResultadosClave = ({ results, rentabilidad }) => {
       maximumFractionDigits: 0,
     }).format(value);
   };
-  
+
   return (
     <div className="bg-black border border-gray-800 rounded-2xl p-6">
       <h3 className="text-xl font-bold text-white mb-4">Resultados Clave</h3>
@@ -49,11 +49,11 @@ const ResultadosClave = ({ results, rentabilidad }) => {
           bgColor="bg-cyan-900/50"
         />
         <ResultadoItem
-          icon={<BarChart className="w-8 h-8 text-green-300" />}
+          icon={<BarChart className="w-8 h-8 text-primary" />}
           label="Producción Mensual (Kg)"
           value={formatNumber(results.produccion_mensual_kg || 0)}
           unit="kg"
-          bgColor="bg-green-900/50"
+          bgColor="bg-primary/20"
         />
         <ResultadoItem
           icon={<TrendingUp className="w-8 h-8 text-purple-300" />}

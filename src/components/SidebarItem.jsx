@@ -187,7 +187,7 @@ const SidebarItem = ({
                   isActive
                     ? (hasSubItems ? "font-bold text-primary" : "font-semibold text-primary")
                     : "text-gray-300",
-                  isEditorMode && !isLocked && "hover:text-green-300 cursor-text"
+                  isEditorMode && !isLocked && "hover:text-primary cursor-text"
                 )}
                 onDoubleClick={(e) => {
                   if (isEditorMode && !isLocked) {

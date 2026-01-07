@@ -429,7 +429,7 @@ const CoextrusionCalculator = ({ config, onUpdate, isEditorMode, onSave }) => {
             <div className="flex justify-between items-end">
               <div>
                 <p className="text-xs text-cyan-400 font-bold mb-1">COSTO PROMEDIO MEZCLA ($/KG)</p>
-                <p className="text-xs text-gray-500">Total fórmula: <span className={metrics.totalFormulaPercent === 100 ? "text-green-400" : "text-yellow-400"}>{metrics.totalFormulaPercent}%</span></p>
+                <p className="text-xs text-gray-500">Total fórmula: <span className={metrics.totalFormulaPercent === 100 ? "text-primary" : "text-yellow-400"}>{metrics.totalFormulaPercent}%</span></p>
               </div>
               <p className="text-2xl font-bold text-white">${metrics.avgMixtureCost.toFixed(2)}</p>
             </div>
@@ -443,7 +443,7 @@ const CoextrusionCalculator = ({ config, onUpdate, isEditorMode, onSave }) => {
 
           <div className="space-y-4">
             <div>
-              <label className="text-xs font-bold text-cyan-400 uppercase mb-1 block">CAPACIDAD DE EXTRUSIÓN (KG/H) · VARIABLE PRINCIPAL</label>
+              <label className="text-xs font-bold text-primary uppercase mb-1 block">CAPACIDAD DE EXTRUSIÓN (KG/H) · VARIABLE PRINCIPAL</label>
               <Input
                 type="number"
                 className="bg-black/50 border-blue-500/50 text-white text-lg h-10 font-bold"
@@ -495,7 +495,7 @@ const CoextrusionCalculator = ({ config, onUpdate, isEditorMode, onSave }) => {
 
             <div className="bg-blue-900/20 p-3 rounded-lg border border-blue-500/20 mt-2">
               <p className="text-xs text-blue-300 uppercase font-bold">PRODUCCIÓN HORARIA (Q)</p>
-              <p className="text-3xl font-black text-cyan-400">{metrics.hourlyProduction.toFixed(1)} <span className="text-sm text-gray-400 font-normal">kg/h</span></p>
+              <p className="text-3xl font-black text-primary">{metrics.hourlyProduction.toFixed(1)} <span className="text-sm text-gray-400 font-normal">kg/h</span></p>
               <p className="text-[10px] text-gray-500 mt-1">
                 Capacidad Teórica (ref): {metrics.theoreticalCapacity.toFixed(1)} kg/h
               </p>
@@ -510,10 +510,10 @@ const CoextrusionCalculator = ({ config, onUpdate, isEditorMode, onSave }) => {
 
           <div className="space-y-4">
             <div>
-              <label className="text-xs font-bold text-green-400 uppercase mb-1 block">PRECIO VENTA OBJETIVO ($/KG)</label>
+              <label className="text-xs font-bold text-primary uppercase mb-1 block">PRECIO VENTA OBJETIVO ($/KG)</label>
               <Input
                 type="number"
-                className="bg-black/50 border-green-500/50 text-green-400 text-lg h-10 font-bold"
+                className="bg-black/50 border-primary/50 text-primary text-lg h-10 font-bold"
                 value={values.costs?.sales_price}
                 onChange={(e) => updateCosts('sales_price', parseFloat(e.target.value) || 0)}
               />
@@ -565,8 +565,8 @@ const CoextrusionCalculator = ({ config, onUpdate, isEditorMode, onSave }) => {
 
       {/* Bottom: 04 - Proyección */}
       <div className="bg-gray-900/40 border border-blue-500/30 rounded-xl p-6 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-blue-600"></div>
-        <h3 className="text-lg font-bold text-green-400 mb-6">04 · PROYECCIÓN DE RENTABILIDAD</h3>
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-blue-600"></div>
+        <h3 className="text-lg font-bold text-primary mb-6">04 · PROYECCIÓN DE RENTABILIDAD</h3>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="bg-black/30 p-4 rounded-lg border-l-4 border-red-500">
@@ -575,9 +575,9 @@ const CoextrusionCalculator = ({ config, onUpdate, isEditorMode, onSave }) => {
             <p className="text-[10px] text-gray-500 mt-1">Materia + energía + fijos</p>
           </div>
 
-          <div className="bg-black/30 p-4 rounded-lg border-l-4 border-green-500">
+          <div className="bg-black/30 p-4 rounded-lg border-l-4 border-primary">
             <p className="text-xs text-gray-400 uppercase font-bold mb-1">MARGEN DE UTILIDAD</p>
-            <p className="text-3xl font-black text-green-400">{metrics.grossMargin.toFixed(1)}%</p>
+            <p className="text-3xl font-black text-primary">{metrics.grossMargin.toFixed(1)}%</p>
           </div>
 
           <div className="bg-black/30 p-4 rounded-lg border-l-4 border-blue-500">
@@ -586,10 +586,10 @@ const CoextrusionCalculator = ({ config, onUpdate, isEditorMode, onSave }) => {
             <p className="text-[10px] text-gray-500 mt-1">Toneladas (30 días)</p>
           </div>
 
-          <div className="bg-green-900/20 p-4 rounded-lg border border-green-500/30">
-            <p className="text-xs text-green-400 uppercase font-bold mb-1">UTILIDAD MENSUAL NETA</p>
-            <p className="text-3xl font-black text-green-400">${metrics.monthlyNetProfit.toLocaleString('en-US', { maximumFractionDigits: 2 })}</p>
-            <p className="text-[10px] text-green-500/70 mt-1">Estimado en bolsillo</p>
+          <div className="bg-primary/20 p-4 rounded-lg border border-primary/30">
+            <p className="text-xs text-primary uppercase font-bold mb-1">UTILIDAD MENSUAL NETA</p>
+            <p className="text-3xl font-black text-primary">${metrics.monthlyNetProfit.toLocaleString('en-US', { maximumFractionDigits: 2 })}</p>
+            <p className="text-[10px] text-primary/70 mt-1">Estimado en bolsillo</p>
           </div>
         </div>
 
@@ -668,7 +668,7 @@ const CalculadoraProduccion = ({ quotationData, isEditorMode, activeTheme }) => 
             <TabsTrigger value="tejas" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white px-8">
               Línea de Tejas
             </TabsTrigger>
-            <TabsTrigger value="coextrusion" className="data-[state=active]:bg-green-600 data-[state=active]:text-white px-8">
+            <TabsTrigger value="coextrusion" className="data-[state=active]:bg-primary data-[state=active]:text-black font-bold px-8">
               Coextrusión
             </TabsTrigger>
           </TabsList>

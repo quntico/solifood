@@ -85,7 +85,7 @@ const EditableText = ({
         <button onClick={toggleAlign} className="p-1 bg-blue-500 text-white rounded-full hover:bg-blue-600" title="Alinear texto">
           {currentAlign === 'justify' ? <AlignJustify size={16} /> : <AlignLeft size={16} />}
         </button>
-        <button onClick={handleSave} className="p-1 bg-green-500 text-white rounded-full hover:bg-green-600"><Save size={16} /></button>
+        <button onClick={handleSave} className="p-1 bg-primary text-black rounded-full hover:bg-primary/80"><Save size={16} /></button>
         <button onClick={handleCancel} className="p-1 bg-red-500 text-white rounded-full hover:bg-red-600"><X size={16} /></button>
       </div>
     </div> : <p

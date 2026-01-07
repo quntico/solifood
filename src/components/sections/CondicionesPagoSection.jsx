@@ -32,7 +32,7 @@ const EditableText = ({ value, onSave, isEditorMode, className = '', tag: Tag = 
             onChange={(e) => setText(e.target.value)}
             className="w-full bg-gray-900 border border-primary rounded-md p-2 text-white focus:outline-none"
           />
-          <button onClick={handleSave} className="p-1.5 bg-green-600 text-white rounded-full hover:bg-green-700 disabled:bg-gray-500" disabled={isSaving}>
+          <button onClick={handleSave} className="p-1.5 bg-primary text-black rounded-full hover:bg-primary/80 disabled:bg-gray-500" disabled={isSaving}>
             {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
           </button>
           <button onClick={() => setIsEditing(false)} className="p-1.5 bg-red-600 text-white rounded-full hover:bg-red-700">
@@ -52,7 +52,7 @@ const EditableText = ({ value, onSave, isEditorMode, className = '', tag: Tag = 
 const PaymentCard = ({ term, isEditorMode, onUpdate, onSave }) => {
   const [localPercentage, setLocalPercentage] = useState(term.percentage);
   const [popoverOpen, setPopoverOpen] = useState(false);
-  
+
   useEffect(() => {
     setLocalPercentage(term.percentage);
   }, [term.percentage]);
@@ -61,7 +61,7 @@ const PaymentCard = ({ term, isEditorMode, onUpdate, onSave }) => {
     setLocalPercentage(newPercentage[0]);
     onUpdate(term.id, newPercentage[0]);
   };
-  
+
   const handleSaveAll = () => {
     onSave();
     setPopoverOpen(false);
@@ -157,49 +157,49 @@ const CondicionesPagoSection = ({ sectionData, isEditorMode, onContentChange }) 
       let newTerms = JSON.parse(JSON.stringify(prevTerms));
       const oldPercentage = newTerms[updatedTermIndex].percentage;
       const diff = newPercentage - oldPercentage;
-  
+
       newTerms[updatedTermIndex].percentage = newPercentage;
       let remainingDiff = -diff;
-      
+
       let otherTerms = newTerms.filter(t => t.id !== updatedId);
-      
+
       while (Math.abs(remainingDiff) > 0.01) {
-          let totalAdjustable = otherTerms.reduce((sum, term) => {
-              if (remainingDiff > 0 && term.percentage < 100) return sum + (100 - term.percentage);
-              if (remainingDiff < 0 && term.percentage > 0) return sum + term.percentage;
-              return sum;
-          }, 0);
-          
-          if(totalAdjustable === 0) break;
-  
-          for (let i = 0; i < otherTerms.length; i++) {
-              let term = otherTerms[i];
-              let adjustment = 0;
-              if (remainingDiff > 0 && term.percentage < 100) {
-                  adjustment = Math.min(remainingDiff, remainingDiff * ((100 - term.percentage) / totalAdjustable));
-              } else if (remainingDiff < 0 && term.percentage > 0) {
-                  adjustment = Math.max(remainingDiff, remainingDiff * (term.percentage / totalAdjustable));
-              }
-              
-              const originalTermIndex = newTerms.findIndex(t => t.id === term.id);
-              newTerms[originalTermIndex].percentage += adjustment;
-              remainingDiff -= adjustment;
+        let totalAdjustable = otherTerms.reduce((sum, term) => {
+          if (remainingDiff > 0 && term.percentage < 100) return sum + (100 - term.percentage);
+          if (remainingDiff < 0 && term.percentage > 0) return sum + term.percentage;
+          return sum;
+        }, 0);
+
+        if (totalAdjustable === 0) break;
+
+        for (let i = 0; i < otherTerms.length; i++) {
+          let term = otherTerms[i];
+          let adjustment = 0;
+          if (remainingDiff > 0 && term.percentage < 100) {
+            adjustment = Math.min(remainingDiff, remainingDiff * ((100 - term.percentage) / totalAdjustable));
+          } else if (remainingDiff < 0 && term.percentage > 0) {
+            adjustment = Math.max(remainingDiff, remainingDiff * (term.percentage / totalAdjustable));
           }
+
+          const originalTermIndex = newTerms.findIndex(t => t.id === term.id);
+          newTerms[originalTermIndex].percentage += adjustment;
+          remainingDiff -= adjustment;
+        }
       }
-  
+
       newTerms.forEach(term => term.percentage = Math.round(term.percentage));
       let currentSum = newTerms.reduce((sum, t) => sum + t.percentage, 0);
       let sumDiff = 100 - currentSum;
-  
+
       if (sumDiff !== 0) {
-          let termToAdjust = newTerms.find(t => t.id !== updatedId && t.percentage + sumDiff >= 0 && t.percentage + sumDiff <= 100) || newTerms[updatedTermIndex];
-          termToAdjust.percentage += sumDiff;
+        let termToAdjust = newTerms.find(t => t.id !== updatedId && t.percentage + sumDiff >= 0 && t.percentage + sumDiff <= 100) || newTerms[updatedTermIndex];
+        termToAdjust.percentage += sumDiff;
       }
-  
+
       return newTerms;
     });
   };
-  
+
   const handleSave = (updatedTerm) => {
     let finalTerms;
     if (updatedTerm) {
@@ -210,7 +210,7 @@ const CondicionesPagoSection = ({ sectionData, isEditorMode, onContentChange }) 
     onContentChange({ ...content, terms: finalTerms });
     toast({ title: 'Condiciones de pago guardadas ☁️' });
   };
-  
+
   const handleSubtitleSave = (newValue) => {
     onContentChange({ ...content, subtitle: newValue });
     toast({ title: 'Contenido guardado ☁️' });
@@ -229,7 +229,7 @@ const CondicionesPagoSection = ({ sectionData, isEditorMode, onContentChange }) 
         >
           <EditableText value={content.subtitle} onSave={handleSubtitleSave} isEditorMode={isEditorMode} />
         </motion.p>
-        
+
         <motion.div
           className="grid grid-cols-1 md:grid-cols-3 gap-8"
           variants={{
@@ -241,10 +241,10 @@ const CondicionesPagoSection = ({ sectionData, isEditorMode, onContentChange }) 
           viewport={{ once: true, amount: 0.3 }}
         >
           {currentTerms.map((term, index) => (
-            <PaymentCard 
-              key={term.id} 
-              term={term} 
-              isEditorMode={isEditorMode} 
+            <PaymentCard
+              key={term.id}
+              term={term}
+              isEditorMode={isEditorMode}
               onUpdate={handleTermUpdate}
               onSave={handleSave}
             />

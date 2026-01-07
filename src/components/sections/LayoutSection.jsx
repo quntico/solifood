@@ -481,7 +481,7 @@ const LayoutSection = ({ sectionData = {}, isEditorMode, onContentChange }) => {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="text-xs text-green-500 border-green-900 bg-green-900/10 hover:bg-green-900/20"
+                        className="text-xs text-primary border-primary/50 bg-primary/10 hover:bg-primary/20"
                         onClick={() => {
                           toast({ title: "Guardando...", description: "Forzando sincronización de datos." });
                           updateContent({ ...content });

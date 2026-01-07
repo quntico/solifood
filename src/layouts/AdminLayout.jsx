@@ -20,7 +20,8 @@ const AdminLayout = () => {
         // Fetch all quotations first (METADATA ONLY)
         const { data: allData, error: allError } = await supabase
           .from('quotations')
-          .select('id, theme_key, project, client, company, is_home, is_template, updated_at, slug');
+          .select('id, theme_key, project, client, company, is_home, is_template, updated_at, slug')
+          .order('updated_at', { ascending: false });
 
         if (allError) {
           throw new Error(`${t('adminLayout.loadError')} ${allError.message}`);

@@ -18,7 +18,7 @@ const CodeLine = ({ children, delay }) => (
     initial={{ opacity: 0 }}
     animate={{ opacity: [0, 1, 1, 0] }}
     transition={{ duration: 2, repeat: Infinity, delay, ease: "linear" }}
-    className="font-mono text-xs text-green-400/50"
+    className="font-mono text-xs text-primary/50"
   >
     {children}
   </motion.p>
@@ -37,7 +37,7 @@ const LoadingScreen = () => {
   const icons = [
     { icon: Cog, color: 'text-primary' },
     { icon: Database, color: 'text-purple-400' },
-    { icon: ShieldCheck, color: 'text-green-400' },
+    { icon: ShieldCheck, color: 'text-primary' },
     { icon: Zap, color: 'text-yellow-400' },
   ];
 

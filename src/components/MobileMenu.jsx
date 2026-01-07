@@ -127,11 +127,11 @@ const MobileMenu = ({
                                         {/* Editor Mode Toggle - Optional for mobile, but maybe useful */}
                                         <button
                                             onClick={() => { setIsEditorMode(!isEditorMode); onClose(); }}
-                                            className={`w-full flex items-center p-3 rounded-lg transition-colors ${isEditorMode ? 'bg-green-500/10 text-green-400' : 'hover:bg-gray-800 text-gray-300'}`}
+                                            className={`w-full flex items-center p-3 rounded-lg transition-colors ${isEditorMode ? 'bg-primary/10 text-primary' : 'hover:bg-gray-800 text-gray-300'}`}
                                         >
                                             <Settings size={20} />
                                             <span className="ml-3 font-semibold">{t('sidebar.editorMode')}</span>
-                                            <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded ${isEditorMode ? 'bg-green-500/20' : 'bg-gray-700'}`}>
+                                            <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded ${isEditorMode ? 'bg-primary/20' : 'bg-gray-700'}`}>
                                                 {isEditorMode ? 'ON' : 'OFF'}
                                             </span>
                                         </button>

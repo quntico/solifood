@@ -482,7 +482,7 @@ const PropuestaEconomicaSection = ({
     }
 
     // Title (Right Aligned)
-    doc.setTextColor(155, 212, 40); // Solimaq Primary Green
+    doc.setTextColor(255, 214, 10); // Solifood Yellow
     doc.setFontSize(22);
     doc.setFont('helvetica', 'bold');
     const titleFull = `${content.pageTitle || 'PROPUESTA'} ${content.pageTitleHighlight || 'ECONÓMICA'}`;
@@ -515,7 +515,7 @@ const PropuestaEconomicaSection = ({
       head: [[t('sections.propuestaDetails.desc'), t('sections.propuestaDetails.potencia'), t('sections.propuestaDetails.importe')]],
       body: tableBody,
       theme: 'grid',
-      headStyles: { fillColor: [155, 212, 40], textColor: [0, 0, 0], fontStyle: 'bold' },
+      headStyles: { fillColor: [255, 214, 10], textColor: [0, 0, 0], fontStyle: 'bold' },
       styles: { cellPadding: 4, fontSize: 10 },
       columnStyles: {
         1: { halign: 'center' },
@@ -562,7 +562,7 @@ const PropuestaEconomicaSection = ({
     // Subtotal (Shown as Main Total)
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(155, 212, 40); // Solimaq Primary Green
+    doc.setTextColor(255, 214, 10); // Solifood Yellow
     doc.text(`${t('sections.propuestaDetails.total')} (${content.currency}):`, labelX, currentY);
     doc.text(formatCurrency(subtotal, content.currency), valueX, currentY, { align: 'right' });
     currentY += lineHeight + 2;
@@ -935,7 +935,7 @@ const PropuestaEconomicaSection = ({
                       <DialogTrigger asChild>
                         <Button
                           variant="outline"
-                          className="w-full border-primary/50 bg-primary/10 text-primary hover:bg-primary/30 hover:text-green-300 transition-all"
+                          className="w-full border-primary/50 bg-primary/10 text-primary hover:bg-primary/30 hover:text-primary transition-all"
                         >
                           <Edit size={18} className="mr-2" /> Editar Estructura y Precios
                         </Button>
@@ -962,7 +962,7 @@ const PropuestaEconomicaSection = ({
                           <div className="w-80 md:w-96 shrink-0 border-r border-gray-800 flex flex-col bg-[#0f0f0f]">
                             <div className="p-4 border-b border-gray-800 flex justify-between items-center">
                               <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Estructura</span>
-                              <Button size="sm" variant="ghost" onClick={handleAddGroup} className="h-7 text-primary hover:text-green-300 hover:bg-primary/20 text-xs">
+                              <Button size="sm" variant="ghost" onClick={handleAddGroup} className="h-7 text-primary hover:text-primary hover:bg-primary/20 text-xs">
                                 <Plus size={12} className="mr-1" /> Grupo
                               </Button>
                             </div>
@@ -1009,7 +1009,7 @@ const PropuestaEconomicaSection = ({
                                             onClick={() => setActiveSelection({ type: 'item', id: item.id, groupId: group.id })}
                                             className={cn(
                                               "flex items-center gap-2 p-2 rounded-md cursor-pointer transition-all text-xs",
-                                              activeSelection.type === 'item' && activeSelection.id === item.id ? "bg-primary/20 text-green-200 border border-primary/20" : "text-gray-500 hover:bg-gray-800 hover:text-gray-300"
+                                              activeSelection.type === 'item' && activeSelection.id === item.id ? "bg-primary/20 text-primary border border-primary/20" : "text-gray-500 hover:bg-gray-800 hover:text-gray-300"
                                             )}
                                           >
                                             <Box size={14} />

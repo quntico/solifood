@@ -13,8 +13,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 48 96% 53%;
+    --primary-foreground: 222.2 47.4% 11.2%;
 
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
@@ -30,9 +30,11 @@
 
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --ring: 48 96% 53%;
 
     --radius: 0.5rem;
+
+    --color-primary-hover: 48 96% 45%;
   }
 
   .dark {
@@ -46,17 +48,17 @@
     --popover: 0 0% 12%;
     --popover-foreground: 0 0% 100%;
 
-    --primary: 88 100% 41%;
-    /* Vibrant Lime Green */
-    --primary-foreground: 0 0% 100%;
+    --primary: 48 96% 53%;
+    /* Solifood Yellow */
+    --primary-foreground: 222.2 47.4% 11.2%;
 
-    --secondary: 0 0% 20%;
+    --secondary: 0 0% 12%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 0 0% 20%;
+    --muted: 0 0% 12%;
     --muted-foreground: 0 0% 60%;
 
-    --accent: 0 0% 20%;
+    --accent: 0 0% 12%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 62.8% 30.6%;
@@ -64,10 +66,12 @@
 
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 221.2 83.2% 53.3%;
+    --ring: 48 96% 53%;
 
-    /* Custom color for LED blue effect */
-    --color-led-blue: 221.2 83.2% 53.3%;
+    /* Custom color for LED yellow effect */
+    --color-led-blue: 48 96% 53%;
+
+    --color-primary-hover: 48 96% 45%;
   }
 }
 
@@ -159,14 +163,14 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #9BD428;
-  /* Lime Green */
+  background: #FFD60A;
+  /* Solifood Yellow */
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #258C28;
-  /* Dark Green on hover */
+  background: #E5C000;
+  /* Darker Yellow on hover */
 }
 
 /* Override for specific components if needed, e.g., Shadcn/ui inputs in dark theme */
@@ -185,27 +189,28 @@
   /* Consistent border color */
 }
 
-/* Electric Blue LED Effect (Solid Blue Style) */
+/* Electric Yellow LED Effect (Solid Yellow Style) */
 .led-blue-text {
-  color: #ffffff !important;
+  color: #000000 !important;
   text-shadow: none;
 }
 
 .led-blue-box {
-  background-color: #9BD428 !important;
-  /* Solid Lime */
-  border-color: #9BD428 !important;
-  box-shadow: 0 4px 6px -1px rgba(155, 212, 40, 0.5), 0 2px 4px -1px rgba(155, 212, 40, 0.3);
+  background-color: #FFD60A !important;
+  /* Solid Yellow */
+  border-color: #FFD60A !important;
+  box-shadow: 0 4px 6px -1px rgba(255, 214, 10, 0.5), 0 2px 4px -1px rgba(255, 214, 10, 0.3);
+  color: #000000 !important;
 }
 
 .led-blue-hover:hover {
-  color: #ffffff !important;
+  color: #000000 !important;
 }
 
 .led-blue-box-hover:hover {
-  background-color: rgba(155, 212, 40, 0.8) !important;
-  border-color: rgba(155, 212, 40, 0.8) !important;
-  box-shadow: 0 0 10px rgba(155, 212, 40, 0.3);
+  background-color: rgba(255, 214, 10, 0.8) !important;
+  border-color: rgba(255, 214, 10, 0.8) !important;
+  box-shadow: 0 0 10px rgba(255, 214, 10, 0.3);
 }
 
 /* Print Styles */

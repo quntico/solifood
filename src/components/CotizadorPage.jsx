@@ -387,7 +387,7 @@ const CotizadorPage = ({ quotationData, activeTheme, setThemes }) => {
                                   }
                                 }}
                                 onFocus={handleFocus}
-                                className={`pr-10 ${viewMode === 'price' ? 'text-green-400 font-bold' : ''}`}
+                                className={`pr-10 ${viewMode === 'price' ? 'text-primary font-bold' : ''}`}
                                 disabled={!opt.isEnabled}
                               />
                               <span className="absolute inset-y-0 right-3 flex items-center text-xs text-gray-400">USD</span>

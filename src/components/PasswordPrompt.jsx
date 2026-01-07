@@ -12,7 +12,7 @@ const PasswordPrompt = ({ onCorrectPassword, onCancel }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (password === '1917') {
+    if (password === '2020') {
       setError(false);
       onCorrectPassword();
       toast({

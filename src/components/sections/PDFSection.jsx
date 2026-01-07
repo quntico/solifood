@@ -441,7 +441,7 @@ const PDFSection = ({ isEditorMode, setIsEditorMode, activeTheme, sectionData })
           <div className="flex flex-col sm:flex-row gap-3 mt-4 sm:mt-12 w-full sm:w-auto">
             {selectedQuotation && (
               <a href={downloadUrl || pdfUrl} download target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto">
-                <Button className="bg-green-600 hover:bg-green-700 text-white flex items-center justify-center gap-2 w-full sm:w-auto shadow-[0_0_15px_rgba(34,197,94,0.3)]">
+                <Button className="bg-primary hover:bg-primary/80 text-black flex items-center justify-center gap-2 w-full sm:w-auto shadow-[0_0_15px_hsl(var(--primary)/0.3)]">
                   <FileDown className="w-4 h-4 text-white" />
                   Exportar PDF
                 </Button>
@@ -501,7 +501,7 @@ const PDFSection = ({ isEditorMode, setIsEditorMode, activeTheme, sectionData })
                           {editingQuotation === q.id ? (
                             <Button size="icon" variant="ghost" onClick={() => setEditingQuotation(null)}><X className="w-4 h-4 text-gray-500" /></Button>
                           ) : (
-                            <Button size="icon" variant="ghost" onClick={() => setEditingQuotation(q.id)}><Edit className="w-4 h-4 text-primary hover:text-green-300" /></Button>
+                            <Button size="icon" variant="ghost" onClick={() => setEditingQuotation(q.id)}><Edit className="w-4 h-4 text-primary hover:text-primary" /></Button>
                           )}
                           <Button size="icon" variant="ghost" onClick={() => handleDeleteQuotation(q.id, q.file_path)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
                         </div>

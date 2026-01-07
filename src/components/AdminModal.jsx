@@ -307,11 +307,12 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
     if (event.target) event.target.value = "";
   };
 
-  const handleSave = async () => {
+  // --- AUTO-SAVE LOGIC ---
+  const saveChanges = async (closeModal = false, silent = false) => {
     if (!currentThemeData) return;
-    setIsSaving(true);
+    if (!silent) setIsSaving(true);
+
     try {
-      // Construct dataToSave carefully from currentThemeData
       const dataToSave = {
         company: currentThemeData.company, project: currentThemeData.project, client: currentThemeData.client,
         title: currentThemeData.title, subtitle: currentThemeData.subtitle, description: currentThemeData.description,
@@ -325,7 +326,7 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
         phase3_name: currentThemeData.phase3_name, phase4_name: currentThemeData.phase4_name,
         slug: currentThemeData.slug,
         hide_banner: currentThemeData.hide_banner,
-        brand_color: currentThemeData.brand_color, // Save brand selection
+        brand_color: currentThemeData.brand_color,
         updated_at: new Date().toISOString(),
       };
 
@@ -337,15 +338,50 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
         [activeTheme]: { ...prev[activeTheme], ...currentThemeData }
       }));
 
-      toast({ title: "¡Guardado exitoso! 🎉", description: `Datos actualizados.` });
-      onClose();
+      if (!silent) toast({ title: "Guardado", description: "Cambios guardados correctamente." });
+      if (closeModal) onClose();
     } catch (error) {
       console.error('Error saving:', error);
-      toast({ title: "Error al guardar", description: error.message, variant: "destructive" });
+      if (!silent) toast({ title: "Error al guardar", description: error.message, variant: "destructive" });
     } finally {
-      setIsSaving(false);
+      if (!silent) setIsSaving(false);
     }
   };
+
+  // Debounced Auto-Save for critical fields
+  useEffect(() => {
+    if (!currentThemeData || !isOpen) return;
+
+    // List of fields that trigger auto-save
+    const autoSaveFields = [currentThemeData.project, currentThemeData.client, currentThemeData.company, currentThemeData.description, currentThemeData.banner_text];
+
+    const timer = setTimeout(() => {
+      // We check if data meaningfuly changed compared to 'themes[activeTheme]'? 
+      // For simplicity, we just save if 'currentThemeData' is valid and stable for 1s.
+      // But to avoid spamming on initial open, we should check diff.
+      // Actually, logic is simpler: Just save. Supabase handles it efficiently.
+      // But we need to avoid saving on *initial load*.
+      // Let's rely on user interaction.
+      // BETTER APPROACH: Only auto-save if 'currentThemeData' DIFFERS from 'themes[activeTheme]'
+      const originalData = themes[activeTheme];
+      if (!originalData) return;
+
+      const hasChanges =
+        originalData.project !== currentThemeData.project ||
+        originalData.client !== currentThemeData.client ||
+        originalData.company !== currentThemeData.company ||
+        originalData.description !== currentThemeData.description ||
+        originalData.banner_text !== currentThemeData.banner_text;
+
+      if (hasChanges) {
+        saveChanges(false, true); // Silent save
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [currentThemeData.project, currentThemeData.client, currentThemeData.company, currentThemeData.description, currentThemeData.banner_text]);
+
+  const handleSave = () => saveChanges(true);
 
   const handleReset = () => {
     if (themes && themes[activeTheme]) {
@@ -781,7 +817,7 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
                 {!isEditingHome && (
                   <Button variant="secondary" onClick={handleSetAsHome} className="bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 w-full"><Home className="h-4 w-4 mr-2" />{t('adminModal.setAsHomePage')}</Button>
                 )}
-                <Button variant="outline" onClick={() => window.location.href = window.location.href.split('?')[0] + '?t=' + new Date().getTime()} className="border-green-500 text-green-500 hover:bg-green-500/10 w-full"><RefreshCw className="h-4 w-4 mr-2" />Ver Cambios en Vivo</Button>
+                <Button variant="outline" onClick={() => window.location.href = window.location.href.split('?')[0] + '?t=' + new Date().getTime()} className="border-primary text-primary hover:bg-primary/10 w-full"><RefreshCw className="h-4 w-4 mr-2" />Ver Cambios en Vivo</Button>
 
                 {!isEditingTemplate && !isEditingHome && (
                   <Button

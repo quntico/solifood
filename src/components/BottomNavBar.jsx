@@ -23,15 +23,15 @@ const BottomNavBar = ({
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
 
   const visibleSections = sections.filter(s => s.isVisible || (isEditorMode && isAdminView));
-  
+
   const cotizadorPageSection = visibleSections.find(s => s.id === 'cotizador_page');
 
   const mainItems = [
     visibleSections.find(s => s.id === 'portada'),
     visibleSections.find(s => s.id === 'propuesta'),
   ].filter(Boolean);
-  
-  const moreItems = visibleSections.filter(s => 
+
+  const moreItems = visibleSections.filter(s =>
     !['portada', 'propuesta', 'cotizador_page'].includes(s.id)
   );
 
@@ -42,7 +42,7 @@ const BottomNavBar = ({
         onClick={onClick}
         className={cn(
           "flex flex-col items-center justify-center gap-1 w-full h-full transition-colors duration-200",
-          isPrimary 
+          isPrimary
             ? (isActive ? 'text-primary' : 'text-primary/70 hover:text-primary')
             : (isActive ? 'text-primary' : 'text-gray-400 hover:text-white')
         )}
@@ -159,19 +159,19 @@ const BottomNavBar = ({
                       }}
                       className={cn(
                         "w-full flex items-center gap-3 p-2 sm:p-3 rounded-lg text-left transition-colors text-sm sm:text-base",
-                        isEditorMode ? 'bg-green-500/10 text-green-400' : 'bg-gray-900 text-gray-300 hover:bg-gray-800'
+                        isEditorMode ? 'bg-primary/10 text-primary' : 'bg-gray-900 text-gray-300 hover:bg-gray-800'
                       )}
                     >
                       <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
                       <span className="font-medium">{t('bottomNav.editorMode')}</span>
-                      <span className={cn("ml-auto px-2 py-0.5 rounded text-xs font-bold", isEditorMode ? "bg-green-500/20 text-green-400" : "bg-gray-700 text-gray-400")}>
+                      <span className={cn("ml-auto px-2 py-0.5 rounded text-xs font-bold", isEditorMode ? "bg-primary/20 text-primary" : "bg-gray-700 text-gray-400")}>
                         {isEditorMode ? t('bottomNav.on') : t('bottomNav.off')}
                       </span>
                     </button>
                     <button
                       onClick={() => {
-                          onAdminClick();
-                          setIsMoreMenuOpen(false);
+                        onAdminClick();
+                        setIsMoreMenuOpen(false);
                       }}
                       className="w-full flex items-center gap-3 p-3 rounded-lg text-left bg-gray-900 text-gray-300 hover:bg-gray-800"
                     >
