@@ -47,7 +47,7 @@ const PortadaSection = ({ quotationData }) => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="text-6xl md:text-8xl font-black text-white tracking-tighter"
+            className="text-6xl md:text-8xl font-black text-primary tracking-tighter"
           >
             {quotationData.title}
           </motion.h1>
@@ -55,7 +55,7 @@ const PortadaSection = ({ quotationData }) => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.6 }}
-            className="text-5xl md:text-7xl font-bold text-primary tracking-tight"
+            className="text-5xl md:text-7xl font-bold text-white tracking-tight"
           >
             {quotationData.subtitle}
           </motion.h2>

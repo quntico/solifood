@@ -3,18 +3,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { iconMap, iconList, extrusionIcons } from '@/lib/iconMap';
-import { Search } from 'lucide-react';
+import { iconMap, iconList, extrusionIcons, solifoodIcons } from '@/lib/iconMap';
+import { Search, Utensils } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const IconPicker = ({ value, onChange, trigger, children, isEditorMode }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [category, setCategory] = useState('extrusion');
+  const [category, setCategory] = useState('solifood'); // Default to Solifood
 
   const filteredIcons = useMemo(() => {
     // Safety check: ensure lists exist
-    const baseList = (category === 'extrusion' && extrusionIcons) ? extrusionIcons : iconList;
+    let baseList = iconList;
+    if (category === 'extrusion' && extrusionIcons) baseList = extrusionIcons;
+    if (category === 'solifood' && solifoodIcons) baseList = solifoodIcons;
 
     if (!search) return baseList.slice(0, 2000);
     return baseList.filter(name =>
@@ -43,7 +45,8 @@ const IconPicker = ({ value, onChange, trigger, children, isEditorMode }) => {
         </DialogHeader>
 
         <Tabs defaultValue="extrusion" value={category} onValueChange={setCategory} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-gray-900 border border-gray-800">
+          <TabsList className="grid w-full grid-cols-3 bg-gray-900 border border-gray-800">
+            <TabsTrigger value="solifood" className="data-[state=active]:bg-primary data-[state=active]:text-white flex items-center gap-2"><Utensils className="w-4 h-4" /> SOLIFOOD</TabsTrigger>
             <TabsTrigger value="extrusion" className="data-[state=active]:bg-primary data-[state=active]:text-white">Extrusión</TabsTrigger>
             <TabsTrigger value="all" className="data-[state=active]:bg-primary data-[state=active]:text-white">Todos</TabsTrigger>
           </TabsList>

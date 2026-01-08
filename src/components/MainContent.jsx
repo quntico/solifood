@@ -9,6 +9,7 @@ const MainContent = ({
   setAiQuery,
   sections,
   allSections,
+  allSectionsData, // Add this
   isEditorMode,
   setIsEditorMode,
   activeTheme,
@@ -18,7 +19,8 @@ const MainContent = ({
 }) => {
 
   const handleContentChange = (sectionId, newContent) => {
-    const newSections = sections.map(sec =>
+    const sourceList = allSectionsData || sections;
+    const newSections = sourceList.map(sec =>
       sec.id === sectionId
         ? { ...sec, content: { ...sec.content, ...newContent } }
         : sec
@@ -27,15 +29,17 @@ const MainContent = ({
   };
 
   const handleSectionContentChange = (sectionId, newContent) => {
-    const newSections = sections.map(sec =>
+    const sourceList = allSectionsData || sections;
+    const newSections = sourceList.map(sec =>
       sec.id === sectionId ? { ...sec, content: newContent } : sec
     );
     onSectionContentUpdate(newSections);
   };
 
   const handleSectionDataChange = (sectionId, newSectionData) => {
-    const newSections = sections.map(sec =>
-      sec.id === sectionId ? newSectionData : sec
+    const sourceList = allSectionsData || sections;
+    const newSections = sourceList.map(sec =>
+      sec.id === sectionId ? { ...sec, ...newSectionData } : sec
     );
     onSectionContentUpdate(newSections);
   };

@@ -67,6 +67,7 @@ const componentMap = {
 };
 
 const defaultSections = [
+  { id: 'portada', label: 'Home', icon: 'Home', isVisible: true, component: 'portada' },
   { id: 'descripcion', label: 'Descripción', icon: 'FileText', isVisible: true, component: 'descripcion' },
   { id: 'ficha', label: 'Ficha Técnica', icon: 'ListChecks', isVisible: true, component: 'ficha' },
   { id: 'cronograma', label: 'Cronograma', icon: 'Calendar', isVisible: true, component: 'cronograma' },
@@ -82,7 +83,9 @@ const defaultSections = [
 
   // Hidden/Auxiliary
   { id: 'ventajas', label: 'VENTAJAS', icon: 'Star', isVisible: false, component: 'ventajas' },
-  { id: 'portada', label: 'Home', icon: 'Home', isVisible: false, component: 'portada' },
+  { id: 'ventajas', label: 'VENTAJAS', icon: 'Star', isVisible: false, component: 'ventajas' },
+  // Portada moved to top
+  { id: 'generales', label: 'Generales', icon: 'ClipboardList', isVisible: false, component: 'generales' },
   { id: 'generales', label: 'Generales', icon: 'ClipboardList', isVisible: false, component: 'generales' },
   { id: 'exclusiones', label: 'Exclusiones', icon: 'XCircle', isVisible: false, component: 'exclusiones' },
   { id: 'ia', label: 'Asistente IA', icon: 'BrainCircuit', isVisible: true, isLocked: false, component: 'ia' },
@@ -109,6 +112,12 @@ const mergeWithDefaults = (config, themeKey) => {
       if (['ia', 'layout', 'video', 'calculadora_prod'].includes(merged.id)) {
         merged.isLocked = false;
       }
+
+      // FORCE VISIBILITY for Portada to ensure it's always the landing
+      if (merged.id === 'portada') {
+        merged.isVisible = true;
+      }
+
       return merged;
     });
   const existingIds = new Set(mergedConfig.map(s => s.id));
@@ -124,7 +133,7 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
   const [themes, setThemes] = useState(isAdminView ? allThemes : { [initialQuotationData.theme_key]: initialQuotationData });
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showCloneModal, setShowCloneModal] = useState(false);
-  const [activeSection, setActiveSection] = useState('descripcion');
+  const [activeSection, setActiveSection] = useState('portada');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showCommandDialog, setShowCommandDialog] = useState(false);
   const [aiQuery, setAiQuery] = useState('');
@@ -262,7 +271,7 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
   };
 
   const handleHomeClick = useCallback(() => {
-    setActiveSection('descripcion');
+    setActiveSection('portada');
     const homeEl = document.getElementById('main-content-scroll-area');
     if (homeEl) homeEl.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
@@ -351,11 +360,22 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
     // Sanitize config to remove Component and other derived props before saving
     const sanitizedConfig = newConfig.map(({ Component, ...rest }) => rest);
 
-    setThemes(prevThemes => ({
-      ...prevThemes,
-      [activeTheme]: { ...prevThemes[activeTheme], sections_config: sanitizedConfig },
-    }));
-    await supabase.from('quotations').update({ sections_config: sanitizedConfig }).eq('theme_key', activeTheme);
+    try {
+      setThemes(prevThemes => ({
+        ...prevThemes,
+        [activeTheme]: { ...prevThemes[activeTheme], sections_config: sanitizedConfig },
+      }));
+      const { error } = await supabase.from('quotations').update({ sections_config: sanitizedConfig }).eq('theme_key', activeTheme);
+      if (error) throw error;
+    } catch (err) {
+      console.error("Error saving sections config:", err);
+      toast({
+        title: "Error de Guardado",
+        description: `Error: ${err.message || err.details || "Desconocido"}.`,
+        variant: "destructive",
+        duration: 5000
+      });
+    }
   };
 
   const [activeTabMap, setActiveTabMap] = useState({});
@@ -497,8 +517,8 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
           }}
         />
       )}
-      <div className="flex h-screen overflow-hidden bg-black">
-        <div className="hidden lg:flex lg:flex-shrink-0">
+      <div className="flex h-screen overflow-hidden bg-black relative">
+        <div className="hidden lg:flex lg:flex-shrink-0 absolute h-full z-50">
           <Sidebar
             activeSection={activeSection}
             onSectionSelect={handleSectionSelect}
@@ -519,7 +539,7 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
             activeTabMap={activeTabMap}
           />
         </div>
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden pl-[80px]">
           <Header
             quotationData={displayData}
             onLogoClick={handleHomeClick}

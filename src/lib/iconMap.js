@@ -54,8 +54,25 @@ export const extrusionIcons = [
   // Data & Electronics
   'Cpu', 'Server', 'Database', 'HardDrive', 'Network', 'Monitor', 'Tablet', 'Smartphone', 'Bot', 'Brain',
 
-  // Safety & Status
   'Shield', 'ShieldCheck', 'Lock', 'Unlock', 'AlertTriangle', 'AlertCircle', 'Info', 'Check', 'CheckCircle', 'X', 'XCircle'
+];
+
+// Special category for Solifood (Food & Process)
+export const solifoodIcons = [
+  // Food & Ingredients
+  'Cookie', 'Candy', 'Wheat', 'Croissant', 'IceCream', 'Egg', 'Beef', 'Fish', 'Apple', 'Banana', 'Cherry', 'Citrus', 'Grape', 'Carrot', 'Salad', 'Sandwich', 'Pizza', 'Coffee', 'CupSoda', 'GlassWater', 'Wine', 'Beer',
+
+  // Shapes & Molds (Chocolate bars, geometric)
+  'Hexagon', 'Octagon', 'dodecahedron', 'Circle', 'Square', 'Triangle', 'Box', 'Package', 'Layers', 'Grid', 'LayoutGrid', 'Diamond',
+
+  // Thermal & Process (Heat, Cool, Tempering)
+  'Thermometer', 'Flame', 'Sun', 'Snowflake', 'Wind', 'Droplet', 'Waves', 'Zap', 'Activity', 'Archive',
+
+  // Machinery & Actions (Conching, Mixing, Packing)
+  'Utensils', 'UtensilsCrossed', 'RotateCw', 'RefreshCcw', 'Repeat', 'Move', 'Settings', 'Cog', 'Cogs', 'Factory', 'Wrench', 'Hammer', 'Scale', 'Timer', 'Hourglass', 'Filter', 'Funnel', 'Siren',
+
+  // Logistics & Quality
+  'Truck', 'Ship', 'Container', 'ClipboardCheck', 'Pipette', 'Microscope', 'Scan', 'Barcode', 'Tag', 'Ticket'
 ];
 
 const allIcons = Object.keys(iconMap);

@@ -75,7 +75,8 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
         hide_banner: themeDataFromApp.hide_banner ?? false,
       });
     }
-  }, [isOpen, activeTheme, themes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, activeTheme]);
 
   // Preview updates
   useEffect(() => {
@@ -476,21 +477,21 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
   return (
     <AnimatePresence>
       {isOpen && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={onClose}>
-          <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} transition={{ type: 'spring', damping: 20, stiffness: 300 }} className="bg-[#0a0a0a] rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col border border-gray-800" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center p-6 border-b border-gray-800 bg-[#0f0f0f]">
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+          <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} transition={{ type: 'spring', damping: 20, stiffness: 300 }} className="bg-black/40 backdrop-blur-2xl rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col border border-white/10 ring-1 ring-white/5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center p-6 border-b border-white/10 bg-white/5">
               <h2 className="text-2xl font-bold text-primary flex items-center gap-3"><Settings className="w-6 h-6 text-primary" />{t('adminModal.panelTitle') || "Panel Admin"}</h2>
-              <Button variant="ghost" size="icon" onClick={onClose} className="text-gray-400 hover:text-white hover:bg-gray-800"><X className="h-5 w-5" /></Button>
+              <Button variant="ghost" size="icon" onClick={onClose} className="text-gray-400 hover:text-white hover:bg-white/10"><X className="h-5 w-5" /></Button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-8">
 
                 {/* --- QUOTATION SELECTOR (POPOVER) --- */}
                 <div className="md:col-span-2">
                   {isManageMode ? (
                     /* --- MANAGEMENT VIEW --- */
-                    <div className="bg-gray-900 rounded-xl border border-gray-700 p-4 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <div className="bg-black/40 rounded-xl border border-white/10 p-4 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
                       <div className="flex items-center justify-between border-b border-gray-800 pb-3 mb-2">
                         <h3 className="text-lg font-bold text-white flex items-center gap-2">
                           <Settings className="w-5 h-5 text-gray-400" />
@@ -665,10 +666,10 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
 
                         {/* SIMPLE NATIVE-LIKE SELECTOR */}
                         <Select value={activeTheme} onValueChange={handleThemeChange}>
-                          <SelectTrigger className="w-full bg-gray-900 border-gray-700 text-white h-10">
+                          <SelectTrigger className="w-full bg-black/20 border-white/10 text-white h-10 backdrop-blur-sm focus:ring-primary/50">
                             <SelectValue placeholder="Seleccionar cotización..." />
                           </SelectTrigger>
-                          <SelectContent className="bg-gray-900 border-gray-700 text-white z-[60] max-h-[300px]">
+                          <SelectContent className="bg-black/90 border-white/10 text-white z-[60] max-h-[300px] backdrop-blur-xl">
                             {Object.values(themes || {})
                               .sort((a, b) => (a?.project || "").localeCompare(b?.project || ""))
                               .map((theme) => (
@@ -709,7 +710,7 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
                   )}
                 </div>
 
-                <div><Label htmlFor="company" className="text-primary mb-2 block font-semibold">{t('adminModal.company')}</Label><Input id="company" name="company" value={currentThemeData.company || ''} onChange={handleInputChange} className="bg-gray-900 border-gray-700 text-white focus:border-primary" /></div>
+                <div><Label htmlFor="company" className="text-primary mb-2 block font-semibold">{t('adminModal.company')}</Label><Input id="company" name="company" value={currentThemeData.company || ''} onChange={handleInputChange} className="bg-black/20 border-white/10 text-white focus:border-primary backdrop-blur-sm" /></div>
 
                 {/* Start Page Switch */}
                 <div className="flex items-center gap-4 mt-2">
@@ -728,12 +729,12 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
                   />
                 </div>
 
-                <div><Label htmlFor="project" className="text-primary mb-2 block font-semibold">{t('adminModal.project')}</Label><Input id="project" name="project" value={currentThemeData.project || ''} onChange={handleInputChange} className="bg-gray-900 border-gray-700 text-white focus:border-primary" /></div>
-                <div><Label htmlFor="client" className="text-primary mb-2 block font-semibold">{t('adminModal.client')}</Label><Input id="client" name="client" value={currentThemeData.client || ''} onChange={handleInputChange} className="bg-gray-900 border-gray-700 text-white focus:border-primary" /></div>
-                <div><Label htmlFor="title" className="text-primary mb-2 block font-semibold">{t('adminModal.title')}</Label><Input id="title" name="title" value={currentThemeData.title || ''} onChange={handleInputChange} className="bg-gray-900 border-gray-700 text-white focus:border-primary" /></div>
-                <div className="md:col-span-2"><Label htmlFor="subtitle" className="text-primary mb-2 block font-semibold">{t('adminModal.subtitle')}</Label><Input id="subtitle" name="subtitle" value={currentThemeData.subtitle || ''} onChange={handleInputChange} className="bg-gray-900 border-gray-700 text-white focus:border-primary" /></div>
-                <div className="md:col-span-2"><Label htmlFor="slug" className="text-primary mb-2 block flex items-center gap-2 font-semibold"><LinkIcon className="w-4 h-4" />{t('adminModal.slug')}</Label><Input id="slug" name="slug" value={currentThemeData.slug || ''} onChange={handleInputChange} className="bg-gray-900 border-gray-700 text-white focus:border-primary" /></div>
-                <div className="md:col-span-2"><Label htmlFor="description" className="text-primary mb-2 block font-semibold">{t('adminModal.description')}</Label><textarea id="description" name="description" value={currentThemeData.description || ''} onChange={handleInputChange} rows="3" className="flex w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50" /></div>
+                <div><Label htmlFor="project" className="text-primary mb-2 block font-semibold">{t('adminModal.project')}</Label><Input id="project" name="project" value={currentThemeData.project || ''} onChange={handleInputChange} className="bg-black/20 border-white/10 text-white focus:border-primary backdrop-blur-sm" /></div>
+                <div><Label htmlFor="client" className="text-primary mb-2 block font-semibold">{t('adminModal.client')}</Label><Input id="client" name="client" value={currentThemeData.client || ''} onChange={handleInputChange} className="bg-black/20 border-white/10 text-white focus:border-primary backdrop-blur-sm" /></div>
+                <div><Label htmlFor="title" className="text-primary mb-2 block font-semibold">{t('adminModal.title')}</Label><Input id="title" name="title" value={currentThemeData.title || ''} onChange={handleInputChange} className="bg-black/20 border-white/10 text-white focus:border-primary backdrop-blur-sm" /></div>
+                <div className="md:col-span-2"><Label htmlFor="subtitle" className="text-primary mb-2 block font-semibold">{t('adminModal.subtitle')}</Label><Input id="subtitle" name="subtitle" value={currentThemeData.subtitle || ''} onChange={handleInputChange} className="bg-black/20 border-white/10 text-white focus:border-primary backdrop-blur-sm" /></div>
+                <div className="md:col-span-2"><Label htmlFor="slug" className="text-primary mb-2 block flex items-center gap-2 font-semibold"><LinkIcon className="w-4 h-4" />{t('adminModal.slug')}</Label><Input id="slug" name="slug" value={currentThemeData.slug || ''} onChange={handleInputChange} className="bg-black/20 border-white/10 text-white focus:border-primary backdrop-blur-sm" /></div>
+                <div className="md:col-span-2"><Label htmlFor="description" className="text-primary mb-2 block font-semibold">{t('adminModal.description')}</Label><textarea id="description" name="description" value={currentThemeData.description || ''} onChange={handleInputChange} rows="3" className="flex w-full rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50 backdrop-blur-sm" /></div>
 
                 {/* Banner Settings */}
                 <div className="md:col-span-2 border-t border-gray-800 pt-6">
@@ -769,24 +770,24 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
                 <div className="md:col-span-2 border-t border-gray-800 pt-6">
                   <h3 className="text-lg font-bold text-primary mb-4 flex items-center gap-2"><Clock className="w-5 h-5" />{t('adminModal.timelineSettings')}</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <div className="space-y-3 p-4 bg-gray-900/50 rounded-lg border border-gray-800">
+                    <div className="space-y-3 p-4 bg-white/5 rounded-lg border border-white/10 backdrop-blur-sm">
                       <Label className="flex items-center gap-2 text-primary font-semibold"><CheckCircle className="w-4 h-4" />{t('adminModal.phase1')}</Label>
-                      <Input name="phase1_name" value={currentThemeData.phase1_name} onChange={handleInputChange} className="bg-gray-900 border-gray-700 text-white focus:border-primary mb-2" />
-                      <Input name="phase1_duration" type="number" value={currentThemeData.phase1_duration} onChange={handleInputChange} className="bg-gray-900 border-gray-700 text-white focus:border-primary" />
+                      <Input name="phase1_name" value={currentThemeData.phase1_name} onChange={handleInputChange} className="bg-black/20 border-white/10 text-white focus:border-primary mb-2" />
+                      <Input name="phase1_duration" type="number" value={currentThemeData.phase1_duration} onChange={handleInputChange} className="bg-black/20 border-white/10 text-white focus:border-primary" />
                     </div>
-                    <div className="space-y-3 p-4 bg-gray-900/50 rounded-lg border border-gray-800">
+                    <div className="space-y-3 p-4 bg-white/5 rounded-lg border border-white/10 backdrop-blur-sm">
                       <Label className="flex items-center gap-2 text-primary font-semibold"><Wrench className="w-4 h-4" />{t('adminModal.phase2')}</Label>
-                      <Input name="phase2_name" value={currentThemeData.phase2_name} onChange={handleInputChange} className="bg-gray-900 border-gray-700 text-white focus:border-primary mb-2" />
-                      <Input name="phase2_duration" type="number" value={currentThemeData.phase2_duration} onChange={handleInputChange} className="bg-gray-900 border-gray-700 text-white focus:border-primary" />
+                      <Input name="phase2_name" value={currentThemeData.phase2_name} onChange={handleInputChange} className="bg-black/20 border-white/10 text-white focus:border-primary mb-2" />
+                      <Input name="phase2_duration" type="number" value={currentThemeData.phase2_duration} onChange={handleInputChange} className="bg-black/20 border-white/10 text-white focus:border-primary" />
                     </div>
-                    <div className="space-y-3 p-4 bg-gray-900/50 rounded-lg border border-gray-800">
+                    <div className="space-y-3 p-4 bg-white/5 rounded-lg border border-white/10 backdrop-blur-sm">
                       <Label className="flex items-center gap-2 text-primary font-semibold"><Ship className="w-4 h-4" />{t('adminModal.phase3')}</Label>
-                      <Input name="phase3_name" value={currentThemeData.phase3_name} onChange={handleInputChange} className="bg-gray-900 border-gray-700 text-white focus:border-primary mb-2" />
-                      <Input name="phase3_duration" type="number" value={currentThemeData.phase3_duration} onChange={handleInputChange} className="bg-gray-900 border-gray-700 text-white focus:border-primary" />
+                      <Input name="phase3_name" value={currentThemeData.phase3_name} onChange={handleInputChange} className="bg-black/20 border-white/10 text-white focus:border-primary mb-2" />
+                      <Input name="phase3_duration" type="number" value={currentThemeData.phase3_duration} onChange={handleInputChange} className="bg-black/20 border-white/10 text-white focus:border-primary" />
                     </div>
-                    <div className="space-y-3 p-4 bg-gray-900/50 rounded-lg border border-gray-800">
+                    <div className="space-y-3 p-4 bg-white/5 rounded-lg border border-white/10 backdrop-blur-sm">
                       <Label className="flex items-center gap-2 text-primary font-semibold"><Truck className="w-4 h-4" />{t('adminModal.phase4')}</Label>
-                      <Input name="phase4_name" value={currentThemeData.phase4_name} onChange={handleInputChange} className="bg-gray-900 border-gray-700 text-white focus:border-primary" />
+                      <Input name="phase4_name" value={currentThemeData.phase4_name} onChange={handleInputChange} className="bg-black/20 border-white/10 text-white focus:border-primary" />
                     </div>
                   </div>
                 </div>

@@ -127,7 +127,7 @@ const Sidebar = ({
           animate={isCollapsed ? 'collapsed' : 'expanded'}
           variants={sidebarVariants}
           transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          className="bg-black border-r border-gray-800 flex flex-col h-full text-white relative z-20"
+          className="bg-black/40 backdrop-blur-xl border-r border-white/10 flex flex-col h-full text-white relative z-20 shadow-2xl"
         >
           <div className="flex-1 overflow-y-auto overflow-x-hidden">
             <div className="p-4 flex items-center justify-between border-b border-gray-800">
