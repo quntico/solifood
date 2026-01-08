@@ -12,7 +12,7 @@ export default {
       cotizadorMode: 'Modo Cotizador',
       admin: 'Administrador',
       logout: 'Cerrar sesión',
-      login: 'Acceso SOLIMAQ',
+      login: 'Acceso SOLIFOOD',
     },
     bottomNav: {
       more: 'Más',
@@ -22,7 +22,7 @@ export default {
       off: 'OFF',
       admin: 'Administrador',
       logout: 'Cerrar sesión',
-      login: 'Acceso SOLIMAQ'
+      login: 'Acceso SOLIFOOD'
     },
     sections: {
       portada: 'Home',
@@ -173,7 +173,7 @@ export default {
       cotizadorMode: 'Quoter Mode',
       admin: 'Administrator',
       logout: 'Log Out',
-      login: 'SOLIMAQ Access',
+      login: 'SOLIFOOD Access',
     },
     bottomNav: {
       more: 'More',
@@ -183,7 +183,7 @@ export default {
       off: 'OFF',
       admin: 'Administrator',
       logout: 'Log Out',
-      login: 'SOLIMAQ Access'
+      login: 'SOLIFOOD Access'
     },
     sections: {
       portada: 'Home',
@@ -334,7 +334,7 @@ export default {
       cotizadorMode: 'Modo Cotador',
       admin: 'Administrador',
       logout: 'Sair',
-      login: 'Acesso SOLIMAQ',
+      login: 'Acesso SOLIFOOD',
     },
     bottomNav: {
       more: 'Mais',
@@ -344,7 +344,7 @@ export default {
       off: 'OFF',
       admin: 'Administrador',
       logout: 'Sair',
-      login: 'Acesso SOLIMAQ'
+      login: 'Acesso SOLIFOOD'
     },
     sections: {
       portada: 'Início',

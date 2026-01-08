@@ -150,7 +150,7 @@ const MobileMenu = ({
                                         isAdminAuthenticated ? onAdminLogout() : onAdminLogin();
                                         onClose();
                                     }}
-                                    className="w-full flex items-center p-3 rounded-lg hover:bg-gray-800 text-gray-300 transition-colors"
+                                    className="w-full flex items-center p-3 rounded-lg hover:bg-gray-800 text-gray-300 hover:text-primary transition-colors"
                                 >
                                     {isAdminAuthenticated ? <LogOut size={20} className="text-red-500" /> : <Shield size={20} />}
                                     <span className="ml-3 font-semibold">{isAdminAuthenticated ? t('sidebar.logout') : t('sidebar.login')}</span>
