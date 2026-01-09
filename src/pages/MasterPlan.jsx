@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import * as XLSX from 'xlsx';
 
 const STORAGE_KEY = "solifood_masterplan_v1_autonomo";
@@ -130,6 +131,7 @@ const initialSections = [
 ];
 
 export default function MasterPlan() {
+    const navigate = useNavigate();
     // Producción (header)
     const [horasDia, setHorasDia] = useState(16);
     const [kgLisas, setKgLisas] = useState(800);
@@ -501,8 +503,12 @@ export default function MasterPlan() {
             <div className="absolute inset-0 bg-black/90 backdrop-blur-[2px] z-0" />
 
             <div className="relative z-10 w-full max-w-[1920px] mx-auto">
-                {/* Header */}
                 <div className="flex items-center gap-4 mb-6">
+                    <div>
+                        <button onClick={() => navigate('/')} className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors mr-4 group" title="Regresar al inicio">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:-translate-x-1 transition-transform"><path d="M19 12H5" /><path d="M12 19l-7-7 7-7" /></svg>
+                        </button>
+                    </div>
                     <div className="w-3 h-3 rounded-full bg-primary shadow-[0_0_10px_rgba(255,214,10,0.5)]" />
                     <div>
                         <div className="font-extrabold text-2xl tracking-tight text-white uppercase">
@@ -568,6 +574,14 @@ export default function MasterPlan() {
                                 Reset
                             </button>
                         )}
+
+                        <button
+                            onClick={() => navigate('/')}
+                            className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+                            title="Cerrar Master Plan"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
                     </div>
                 </div>
 
