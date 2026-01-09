@@ -4,6 +4,8 @@ import { HelmetProvider } from 'react-helmet-async';
 import AdminLayout from '@/layouts/AdminLayout';
 import ClientLayout from '@/layouts/ClientLayout';
 
+import MasterPlan from "@/pages/MasterPlan";
+
 function App() {
   return (
     <HelmetProvider>
@@ -11,6 +13,7 @@ function App() {
         <Routes>
           <Route path="/" element={<AdminLayout />} />
           <Route path="/cotizacion/:slug" element={<ClientLayout />} />
+          <Route path="/solifood/master-plan" element={<MasterPlan />} />
         </Routes>
       </Router>
     </HelmetProvider>

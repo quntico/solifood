@@ -82,11 +82,6 @@ const defaultSections = [
   { id: 'propuesta', label: 'Propuesta Económica', icon: 'DollarSign', isVisible: true, component: 'propuesta' },
 
   // Hidden/Auxiliary
-  { id: 'ventajas', label: 'VENTAJAS', icon: 'Star', isVisible: false, component: 'ventajas' },
-  { id: 'ventajas', label: 'VENTAJAS', icon: 'Star', isVisible: false, component: 'ventajas' },
-  // Portada moved to top
-  { id: 'generales', label: 'Generales', icon: 'ClipboardList', isVisible: false, component: 'generales' },
-  { id: 'generales', label: 'Generales', icon: 'ClipboardList', isVisible: false, component: 'generales' },
   { id: 'exclusiones', label: 'Exclusiones', icon: 'XCircle', isVisible: false, component: 'exclusiones' },
   { id: 'ia', label: 'Asistente IA', icon: 'BrainCircuit', isVisible: true, isLocked: false, component: 'ia' },
 ];
@@ -134,7 +129,7 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showCloneModal, setShowCloneModal] = useState(false);
   const [activeSection, setActiveSection] = useState('portada');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   const [showCommandDialog, setShowCommandDialog] = useState(false);
   const [aiQuery, setAiQuery] = useState('');
   const [isBannerVisible, setIsBannerVisible] = useState(true);
@@ -418,15 +413,33 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
   });
 
   // Extra safety filter to ensure removed components don't crash
-  menuItems = menuItems.filter(section => section.id !== 'propuesta_dinamica');
+  menuItems = menuItems.filter(section => section.id !== 'propuesta_dinamica' && !['ventajas', 'generales'].includes(section.id));
 
   if (!isAdminView) {
     // Filter hidden items and admin items for normal view
-    menuItems = menuItems.filter(item => item.isVisible && clientVisibleSections.has(item.id.split('_copy')[0]) && !item.adminOnly);
+    menuItems = menuItems.filter(item => item.isVisible && clientVisibleSections.has(item.id.split('_copy')[0]) && !item.adminOnly && !item._deleted);
   } else if (!isAdminAuthenticated) {
     // Filter admin items for non-authenticated admin view AND respect visibility
-    menuItems = menuItems.filter(item => item.isVisible && !item.adminOnly);
+    menuItems = menuItems.filter(item => item.isVisible && !item.adminOnly && !item._deleted);
+  } else {
+    // Admin authenticated view: still hide deleted items
+    menuItems = menuItems.filter(item => !item._deleted);
   }
+
+  const handleDeleteSection = async (sectionId) => {
+    const fullConfig = displayData.sections_config || defaultSections;
+    // Map over FULL config to mark item as deleted
+    const newConfig = fullConfig.map(s =>
+      s.id === sectionId ? { ...s, _deleted: true } : s
+    );
+
+    await setSectionsConfig(newConfig);
+
+    toast({
+      title: "Sección eliminada",
+      description: "La sección se ha eliminado correctamente.",
+    });
+  };
 
   const handleVideoUrlUpdate = async (newUrl) => {
     const updatedData = { ...displayData, video_url: newUrl };
@@ -537,6 +550,7 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
             onCotizadorClick={() => handleSectionSelect('cotizador_page')}
             onSubItemSelect={handleSubItemSelect}
             activeTabMap={activeTabMap}
+            onDeleteSection={handleDeleteSection}
           />
         </div>
         <div className="flex-1 flex flex-col overflow-hidden pl-[80px]">

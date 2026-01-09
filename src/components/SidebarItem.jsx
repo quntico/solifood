@@ -150,14 +150,14 @@ const SidebarItem = ({
         <IconPicker
           value={section.icon}
           onChange={onIconChange}
-          isEditorMode={isEditorMode && !isLocked}
+          isEditorMode={isEditorMode}
           trigger={
             <div
               className={cn(
                 "flex-shrink-0 transition-transform duration-200 p-1 rounded-md",
-                isEditorMode && !isLocked ? "hover:bg-white/10 cursor-pointer" : ""
+                isEditorMode ? "hover:bg-white/10 cursor-pointer" : ""
               )}
-              onClick={(e) => isEditorMode && !isLocked && e.stopPropagation()}
+              onClick={(e) => isEditorMode && e.stopPropagation()}
             >
               <Icon className={cn(
                 "w-5 h-5 text-primary",
@@ -187,10 +187,10 @@ const SidebarItem = ({
                   isActive
                     ? (hasSubItems ? "font-bold text-primary" : "font-semibold text-primary")
                     : "text-gray-300",
-                  isEditorMode && !isLocked && "hover:text-primary cursor-text"
+                  isEditorMode && "hover:text-primary cursor-text"
                 )}
                 onDoubleClick={(e) => {
-                  if (isEditorMode && !isLocked) {
+                  if (isEditorMode) {
                     e.preventDefault();
                     e.stopPropagation();
                     setIsEditingLabel(true);
@@ -223,40 +223,34 @@ const SidebarItem = ({
           <div className="ml-auto flex items-center gap-1 opacity-100 transition-opacity bg-black/90 backdrop-blur-sm rounded-l-md pl-1 shadow-xl border-l border-gray-800/50 absolute right-0 h-full pr-1">
 
             {/* Rename Button (Direct Access) */}
-            {!isLocked && (
-              <button
-                onClick={(e) => { e.stopPropagation(); setIsEditingLabel(true); }}
-                className="p-1.5 hover:text-primary text-gray-400 transition-colors rounded-md hover:bg-white/5"
-                title="Renombrar"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-              </button>
-            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); setIsEditingLabel(true); }}
+              className="p-1.5 hover:text-primary text-gray-400 transition-colors rounded-md hover:bg-white/5"
+              title="Renombrar"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
 
             {/* Delete Button (Direct Access) */}
-            {!isLocked && (
-              <button
-                onClick={onDelete}
-                className="p-1.5 hover:text-red-400 text-gray-400 transition-colors rounded-md hover:bg-white/5"
-                title="Eliminar"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
+            <button
+              onClick={onDelete}
+              className="p-1.5 hover:text-red-400 text-gray-400 transition-colors rounded-md hover:bg-white/5"
+              title="Eliminar"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
 
             {/* Visibility Toggle */}
-            {!isLocked && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onVisibilityToggle(); }}
-                className={cn(
-                  "p-1.5 transition-colors rounded-md hover:bg-white/5",
-                  isVisible ? "hover:text-primary text-gray-400" : "text-gray-600"
-                )}
-                title={isVisible ? "Ocultar" : "Mostrar"}
-              >
-                {isVisible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-              </button>
-            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); onVisibilityToggle(); }}
+              className={cn(
+                "p-1.5 transition-colors rounded-md hover:bg-white/5",
+                isVisible ? "hover:text-primary text-gray-400" : "text-gray-600"
+              )}
+              title={isVisible ? "Ocultar" : "Mostrar"}
+            >
+              {isVisible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+            </button>
 
             {/* More Actions Dropdown */}
             <DropdownMenu>
@@ -273,13 +267,11 @@ const SidebarItem = ({
                   <ArrowDown className="w-4 h-4 mr-2" /> Mover Abajo
                 </DropdownMenuItem>
 
-                {!isLocked && (
-                  <>
-                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDuplicate(e); }} className="cursor-pointer focus:bg-gray-800">
-                      <Copy className="w-4 h-4 mr-2" /> Duplicar
-                    </DropdownMenuItem>
-                  </>
-                )}
+                <>
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDuplicate(e); }} className="cursor-pointer focus:bg-gray-800">
+                    <Copy className="w-4 h-4 mr-2" /> Duplicar
+                  </DropdownMenuItem>
+                </>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

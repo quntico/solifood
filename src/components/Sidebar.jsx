@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronsLeft, ChevronsRight, Settings, Shield, LogOut, Edit, Calculator, Printer } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, Settings, Shield, LogOut, Edit, Calculator, Printer, Map } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import SidebarItem from './SidebarItem';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -33,10 +34,12 @@ const Sidebar = ({
   isAdminView,
   onCotizadorClick,
   onSubItemSelect,
-  activeTabMap
+  activeTabMap,
+  onDeleteSection
 }) => {
   const { t } = useLanguage();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [sectionToDelete, setSectionToDelete] = useState(null);
 
   const sidebarVariants = {
@@ -54,7 +57,7 @@ const Sidebar = ({
 
   const toggleSectionVisibility = (id) => {
     const newSections = sections.map(section =>
-      section.id === id ? { ...section, isVisible: !section.isVisible } : section
+      section.id === id ? { ...section, isVisible: !(section.isVisible !== false) } : section
     );
     setSections(newSections);
 
@@ -113,8 +116,15 @@ const Sidebar = ({
 
   const confirmDelete = () => {
     if (sectionToDelete) {
-      const newSections = sections.filter(s => s.id !== sectionToDelete);
-      setSections(newSections);
+      if (onDeleteSection) {
+        onDeleteSection(sectionToDelete);
+      } else {
+        // Fallback (Local soft-delete) if prop not provided
+        const newSections = sections.map(s =>
+          s.id === sectionToDelete ? { ...s, _deleted: true } : s
+        );
+        setSections(newSections);
+      }
       setSectionToDelete(null);
     }
   };
@@ -165,8 +175,8 @@ const Sidebar = ({
                               onSubItemSelect={(index) => onSubItemSelect && onSubItemSelect(section.id, index)}
                               activeSubItemIndex={activeTabMap ? activeTabMap[section.id] : undefined}
 
-                              onMoveUp={(e) => { e.stopPropagation(); moveSection(index, 'up'); }}
-                              onMoveDown={(e) => { e.stopPropagation(); moveSection(index, 'down'); }}
+                              onMoveUp={() => moveSection(index, 'up')}
+                              onMoveDown={() => moveSection(index, 'down')}
                               onLabelChange={(val) => updateSectionLabel(section.id, val)}
                               onIconChange={(val) => updateSectionIcon(section.id, val)}
                               onDuplicate={(e) => { e.stopPropagation(); duplicateSection(section, index); }}
@@ -186,6 +196,34 @@ const Sidebar = ({
                   </div>
                 )}
               </Droppable>
+
+              {/* Solifood Submenu */}
+              <div className="px-4 pt-4">
+                {!isCollapsed && (
+                  <div className="mb-2 px-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Solifood
+                  </div>
+                )}
+                <button
+                  onClick={() => navigate('/solifood/master-plan')}
+                  className={`w-full flex items-center p-2 rounded-md transition-colors text-gray-400 hover:text-white hover:bg-white/5 group`}
+                >
+                  <div className="flex-shrink-0">
+                    <Map size={20} className="group-hover:text-primary transition-colors" />
+                  </div>
+                  {!isCollapsed && (
+                    <span className="ml-3 text-sm font-medium">MASTER PLAN</span>
+                  )}
+                </button>
+              </div>
+
+              {!isCollapsed && (
+                <div className="px-6 py-4 mt-auto">
+                  <div className="text-[10px] font-mono text-gray-600 tracking-widest opacity-50">
+                    VER 1.23
+                  </div>
+                </div>
+              )}
             </nav>
           </div>
 
@@ -225,23 +263,23 @@ const Sidebar = ({
               </button>
             </div>
           )}
-        </motion.div>
-      </DragDropContext>
+        </motion.div >
+      </DragDropContext >
 
       <AlertDialog open={!!sectionToDelete} onOpenChange={(open) => !open && setSectionToDelete(null)}>
         <AlertDialogContent className="bg-gray-900 border-gray-800 text-white">
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('sidebar.deleteTitle') || 'Eliminar sección'}</AlertDialogTitle>
+            <AlertDialogTitle>¿Eliminar "{sections.find(s => s.id === sectionToDelete)?.label}"?</AlertDialogTitle>
             <AlertDialogDescription className="text-gray-400">
-              {t('sidebar.deleteConfirm') || '¿Estás seguro de que quieres eliminar esta sección? Esta acción no se puede deshacer.'}
+              Esta sección se eliminará permanentemente de tu cotización. ¿Estás seguro?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="bg-gray-800 text-white hover:bg-gray-700 border-gray-700">
-              {t('common.cancel') || 'Cancelar'}
+              Cancelar
             </AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">
-              {t('common.delete') || 'Eliminar'}
+              Eliminar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
