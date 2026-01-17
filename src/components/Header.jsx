@@ -82,7 +82,7 @@ const Header = ({
                 {/* Refined Version Badge: Píldora con LED Online */}
                 <div className="absolute -bottom-1 -right-4 translate-x-full hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/80 border border-white/20 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-sm">
                   <div className="w-2 h-2 rounded-full bg-[#22c55e] shadow-[0_0_8px_#22c55e] animate-pulse" />
-                  <span className="text-[9px] font-mono font-bold text-gray-300 tracking-[0.2em] whitespace-nowrap uppercase">Ver 2.21</span>
+                  <span className="text-[9px] font-mono font-bold text-gray-300 tracking-[0.2em] whitespace-nowrap uppercase">Ver 2.22</span>
                 </div>
               </div>
             )}

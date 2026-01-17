@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import * as XLSX from 'xlsx';
 import { supabase } from "@/lib/customSupabaseClient";
 import { getActiveBucket } from "@/lib/bucketResolver";
-import { Camera, Video, Image as ImageIcon, X, Maximize2, Upload, Loader2, Play, Lock, Unlock, Settings } from "lucide-react";
+import { Camera, Video, Image as ImageIcon, X, Maximize2, Upload, Loader2, Play, Lock, Unlock, Settings, AlignLeft, AlignJustify } from "lucide-react";
 import {
     Dialog,
     DialogContent,
@@ -625,6 +625,10 @@ export default function MasterPlan() {
         setSections(prev => prev.map(s => s.id === sectionId ? { ...s, summaryDesc: newDesc } : s));
     };
 
+    const toggleSectionJustify = (sectionId) => {
+        setSections(prev => prev.map(s => s.id === sectionId ? { ...s, justify: !s.justify } : s));
+    };
+
     return (
         <div className="min-h-screen bg-black text-white px-8 md:px-16 lg:px-32 py-12 pb-32 bg-[url('https://horizons-cdn.hostinger.com/0f98fff3-e5cd-4ceb-b0fd-55d6f1d7dd5c/dcea69d21f8fa04833cff852034084fb.png')] bg-cover bg-fixed bg-center relative">
             <div className="absolute inset-0 bg-black/90 backdrop-blur-[2px] z-0" />
@@ -642,7 +646,7 @@ export default function MasterPlan() {
                             SOLIFOOD <span className="text-primary">MASTER PLAN</span>
                             <div className="flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-black border border-white/10 shadow-[0_0_20px_rgba(0,0,0,1)]">
                                 <div className="w-2 h-2 rounded-full bg-[#22c55e] shadow-[0_0_8px_#22c55e] animate-pulse" />
-                                <span className="text-[10px] font-mono font-bold text-gray-300 tracking-[0.2em]">Ver 2.21</span>
+                                <span className="text-[10px] font-mono font-bold text-gray-300 tracking-[0.2em]">Ver 2.22</span>
                             </div>
                         </div>
                         <div className="text-gray-400 text-sm mt-1">
@@ -871,19 +875,30 @@ export default function MasterPlan() {
                                 </div>
 
                                 {s.collapsed ? (
-                                    <div className="border border-white/10 rounded-xl bg-zinc-900/50 backdrop-blur-sm p-6 flex items-start gap-8 animate-in fade-in zoom-in-95 duration-200">
+                                    <div className="group border border-white/10 rounded-xl bg-zinc-900/50 backdrop-blur-sm p-6 flex items-start gap-8 animate-in fade-in zoom-in-95 duration-200 transition-colors hover:border-primary/40">
                                         <div className="flex-1">
-                                            <div className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Descripción del Sistema</div>
+                                            <div className="flex justify-between items-center mb-2">
+                                                <div className="text-sm font-bold text-gray-500 uppercase tracking-wider group-hover:text-primary transition-colors">Descripción del Sistema</div>
+                                                {isAdmin && (
+                                                    <button
+                                                        onClick={() => toggleSectionJustify(s.id)}
+                                                        className={`p-1.5 rounded-md border transition-all ${s.justify ? 'bg-primary text-black border-primary' : 'bg-transparent text-gray-500 border-white/10 hover:border-white/30'}`}
+                                                        title={s.justify ? "Alineado a la izquierda" : "Justificar texto"}
+                                                    >
+                                                        {s.justify ? <AlignJustify size={14} /> : <AlignLeft size={14} />}
+                                                    </button>
+                                                )}
+                                            </div>
                                             {isAdmin ? (
                                                 <textarea
                                                     value={s.summaryDesc || ""}
                                                     onChange={(e) => updateSectionDesc(s.id, e.target.value)}
-                                                    className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-gray-300 focus:text-white focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all text-sm resize-none"
+                                                    className={`w-full bg-black/20 border border-white/10 rounded-lg p-3 text-gray-300 focus:text-white focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all text-sm resize-none custom-scrollbar ${s.justify ? 'text-justify' : 'text-left'}`}
                                                     placeholder="Escribe una breve descripción de esta sección..."
                                                     rows={3}
                                                 />
                                             ) : ( /* Read-only view */
-                                                <div className="text-gray-400 text-sm leading-relaxed">
+                                                <div className={`text-gray-400 text-sm leading-relaxed ${s.justify ? 'text-justify' : 'text-left'}`}>
                                                     {s.summaryDesc || "Sin descripción."}
                                                 </div>
                                             )}
