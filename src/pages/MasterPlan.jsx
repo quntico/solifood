@@ -1,6 +1,17 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from 'xlsx';
+import { supabase } from "@/lib/customSupabaseClient";
+import { getActiveBucket } from "@/lib/bucketResolver";
+import { Camera, Video, Image as ImageIcon, X, Maximize2, Upload, Loader2, Play, Lock, Unlock, Settings } from "lucide-react";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/use-toast";
 
 const STORAGE_KEY = "solifood_masterplan_v1_autonomo";
 
@@ -150,6 +161,121 @@ export default function MasterPlan() {
     // “Fórmula extra” opcional
     const [margenPct, setMargenPct] = useState(10);
     const [isAdmin, setIsAdmin] = useState(false);
+    const { toast } = useToast();
+    const [uploadingId, setUploadingId] = useState(null);
+    const [selectedMedia, setSelectedMedia] = useState(null);
+    const [colsLocked, setColsLocked] = useState(() => {
+        return localStorage.getItem("solifood_masterplan_colsLocked") === "true";
+    });
+    const [isParamsModalOpen, setIsParamsModalOpen] = useState(false);
+
+    useEffect(() => {
+        localStorage.setItem("solifood_masterplan_colsLocked", colsLocked);
+    }, [colsLocked]);
+
+    const [colWidths, setColWidths] = useState(() => {
+        try {
+            const saved = localStorage.getItem("solifood_masterplan_colWidths_v2");
+            return saved ? JSON.parse(saved) : {
+                ok: 50,
+                equipo: 300,
+                descripcion: 450,
+                multimedia: 140,
+                utilidad: 90,
+                qty: 80,
+                costo: 130,
+                precioUnit: 130,
+                totalCosto: 130,
+                totalVenta: 130
+            };
+        } catch { return {}; }
+    });
+
+    useEffect(() => {
+        localStorage.setItem("solifood_masterplan_colWidths_v2", JSON.stringify(colWidths));
+    }, [colWidths]);
+
+    const resizeRef = useRef({ col: null, startX: 0, startWidth: 0 });
+
+    const startResize = (col, e) => {
+        if (colsLocked) return;
+        e.preventDefault();
+        resizeRef.current = {
+            col,
+            startX: e.pageX,
+            startWidth: colWidths[col] || 100
+        };
+        document.addEventListener("mousemove", handleResize);
+        document.addEventListener("mouseup", stopResize);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    };
+
+    const handleResize = (e) => {
+        const { col, startX, startWidth } = resizeRef.current;
+        if (!col) return;
+        const diff = e.pageX - startX;
+        setColWidths(prev => ({
+            ...prev,
+            [col]: Math.max(40, startWidth + diff)
+        }));
+    };
+
+    const stopResize = () => {
+        document.removeEventListener("mousemove", handleResize);
+        document.removeEventListener("mouseup", stopResize);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        resizeRef.current = { col: null, startX: 0, startWidth: 0 };
+    };
+
+    const resetView = () => {
+        if (!confirm("¿Restablecer el tamaño de las columnas a los valores predeterminados?")) return;
+        localStorage.removeItem("solifood_masterplan_colWidths_v2");
+        setColWidths({
+            ok: 50,
+            equipo: 300,
+            descripcion: 450,
+            multimedia: 140,
+            utilidad: 90,
+            qty: 80,
+            costo: 130,
+            precioUnit: 130,
+            totalCosto: 130,
+            totalVenta: 130
+        });
+    };
+
+    const handleMediaUpload = async (sectionId, itemId, file) => {
+        if (!file) return;
+        setUploadingId(itemId);
+        try {
+            const bucket = await getActiveBucket();
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${sectionId}_${itemId}_${Date.now()}.${fileExt}`;
+            const filePath = `masterplan/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from(bucket)
+                .upload(filePath, file);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from(bucket)
+                .getPublicUrl(filePath);
+
+            updateItem(sectionId, itemId, {
+                media_url: publicUrl,
+                media_type: file.type.startsWith('video') ? 'video' : 'image'
+            });
+        } catch (error) {
+            console.error("Error uploading media:", error);
+            alert("Error al subir archivo");
+        } finally {
+            setUploadingId(null);
+        }
+    };
     const [autoMargen, setAutoMargen] = useState(true);
     const [globalUtilidad, setGlobalUtilidad] = useState(10);
 
@@ -257,6 +383,7 @@ export default function MasterPlan() {
             let c = 0;
             let v = 0;
             s.items.forEach((it) => {
+                if (!it.activo) return;
                 const r = calcItem(it);
                 c += r.totalCosto;
                 v += r.totalVenta;
@@ -511,8 +638,12 @@ export default function MasterPlan() {
                     </div>
                     <div className="w-3 h-3 rounded-full bg-primary shadow-[0_0_10px_rgba(255,214,10,0.5)]" />
                     <div>
-                        <div className="font-extrabold text-2xl tracking-tight text-white uppercase">
-                            SOLIFOOD <span className="text-primary">MASTER PLAN</span> <span className="text-gray-500 text-lg ml-2">(Autónomo)</span>
+                        <div className="font-extrabold text-2xl tracking-tight text-white uppercase flex items-center gap-4">
+                            SOLIFOOD <span className="text-primary">MASTER PLAN</span>
+                            <div className="flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-black border border-white/10 shadow-[0_0_20px_rgba(0,0,0,1)]">
+                                <div className="w-2 h-2 rounded-full bg-[#22c55e] shadow-[0_0_8px_#22c55e] animate-pulse" />
+                                <span className="text-[10px] font-mono font-bold text-gray-300 tracking-[0.2em]">Ver 2.21</span>
+                            </div>
                         </div>
                         <div className="text-gray-400 text-sm mt-1">
                             Proyecto desde grano + 2 líneas de tabletas + polvo bebida + empaque.
@@ -527,6 +658,105 @@ export default function MasterPlan() {
                         >
                             {isAdmin ? "EDITOR (ACTIVO)" : "EDITOR"}
                         </button>
+
+                        {/* Parámetros Iniciales en Header */}
+                        <Dialog open={isParamsModalOpen} onOpenChange={setIsParamsModalOpen}>
+                            <DialogTrigger asChild>
+                                <button
+                                    className="px-4 py-2 rounded-full bg-white/5 border border-primary/30 text-primary font-bold hover:bg-primary/10 transition-all flex items-center gap-2 group text-sm"
+                                >
+                                    <Settings size={16} className="group-hover:rotate-90 transition-transform duration-500" />
+                                    PARÁMETROS INICIALES
+                                </button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-4xl max-h-[90vh] bg-zinc-950/90 backdrop-blur-2xl border border-white/20 text-white p-0 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5),inset_0_0_20px_rgba(255,255,255,0.05)] ring-1 ring-white/10">
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none"></div>
+
+                                <div className="overflow-y-auto max-h-[90vh] p-8 custom-scrollbar">
+                                    <DialogHeader className="mb-8 relative z-10">
+                                        <DialogTitle className="text-3xl font-black text-primary tracking-tighter uppercase flex items-center gap-3">
+                                            <Settings size={28} />
+                                            Configuración del Sistema
+                                        </DialogTitle>
+                                        <p className="text-gray-500 font-medium tracking-wide">Ajusta los parámetros globales de producción y finanzas.</p>
+                                    </DialogHeader>
+
+                                    <div className="space-y-10 relative z-10">
+                                        {/* Producción */}
+                                        <div className="space-y-6">
+                                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                                                <div className="w-8 h-[1px] bg-gray-800"></div>
+                                                Parámetros de Producción
+                                            </h4>
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                                <Field label="Horas/día" value={horasDia} onChange={setHorasDia} />
+                                                <div className="col-span-1" />
+                                                <div className="col-span-1" />
+                                                <div className="col-span-1" />
+
+                                                <Field label="Kg/día lisas" value={kgLisas} onChange={setKgLisas} />
+                                                <Field label="g por tableta lisa" value={gLisas} onChange={setGLisas} />
+                                                <Field label="Kg/día hex" value={kgHex} onChange={setKgHex} />
+                                                <Field label="g por tableta hex" value={gHex} onChange={setGHex} />
+                                                <Field label="Kg/día polvo" value={kgPolvo} onChange={setKgPolvo} />
+                                                <Field label="g por bolsa polvo" value={gBolsaPolvo} onChange={setGBolsaPolvo} />
+                                            </div>
+
+                                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 pt-4">
+                                                <KPI label="Lisas (pzas/día)" value={fmt0(piezasLisasDia)} />
+                                                <KPI label="Lisas (pzas/h)" value={fmt0(piezasLisasHora)} />
+                                                <KPI label="Hex (pzas/día)" value={fmt0(piezasHexDia)} />
+                                                <KPI label="Hex (pzas/h)" value={fmt0(piezasHexHora)} />
+                                                <KPI label="Polvo (bolsas/día)" value={fmt0(bolsasPolvoDia)} />
+                                                <KPI label="Polvo (bolsas/h)" value={fmt1(bolsasPolvoHora)} />
+                                            </div>
+                                        </div>
+
+                                        {/* Finanzas */}
+                                        <div className="space-y-6">
+                                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                                                <div className="w-8 h-[1px] bg-gray-800"></div>
+                                                Parámetros Financieros
+                                            </h4>
+                                            <div className="flex gap-6 flex-wrap items-end bg-white/5 p-6 rounded-2xl border border-white/5">
+                                                <FieldDark label="Tipo de cambio (MXN/USD)" value={tipoCambio} onChange={setTipoCambio} />
+                                                <FieldDark label="IVA (%)" value={ivaPct} onChange={setIvaPct} />
+
+                                                <div className="flex gap-2 items-end">
+                                                    <FieldDark label="Utilidad Global (%)" value={globalUtilidad} onChange={setGlobalUtilidad} compact />
+                                                    <button
+                                                        onClick={() => {
+                                                            applyGlobalUtility();
+                                                            toast({ title: "Utilidad aplicada", description: "Se ha actualizado la utilidad en todos los ítems activos." });
+                                                        }}
+                                                        className="mb-[2px] px-6 py-2.5 bg-white/10 text-white font-bold rounded-lg hover:bg-white/20 transition-all text-sm border border-white/10"
+                                                    >
+                                                        Actualizar todo
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-10 pt-6 border-t border-white/5 flex justify-end">
+                                        <button
+                                            onClick={() => {
+                                                setIsParamsModalOpen(false);
+                                                toast({
+                                                    title: "Cambios guardados",
+                                                    description: "Los parámetros de producción y finanzas se han actualizado correctamente.",
+                                                    variant: "default",
+                                                });
+                                            }}
+                                            className="px-10 py-4 bg-primary text-black font-black rounded-xl hover:scale-105 transition-all shadow-[0_10px_30px_rgba(255,214,10,0.3)] uppercase tracking-widest text-sm flex items-center gap-2"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+                                            GUARDAR CAMBIOS
+                                        </button>
+                                    </div>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
 
                         {isAdmin && (
                             <>
@@ -567,12 +797,29 @@ export default function MasterPlan() {
                         </button>
 
                         {isAdmin && (
-                            <button
-                                onClick={reset}
-                                className="px-4 py-2 rounded-full border border-red-900/30 bg-red-950/20 text-red-500 font-bold hover:bg-red-900/30 transition-colors text-sm"
-                            >
-                                Reset
-                            </button>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={reset}
+                                    className="px-4 py-2 rounded-full border border-red-900/30 bg-red-950/20 text-red-500 font-bold hover:bg-red-900/30 transition-colors text-sm"
+                                >
+                                    Reset
+                                </button>
+                                <button
+                                    onClick={() => setColsLocked(!colsLocked)}
+                                    className={`px-4 py-2 rounded-full border transition-colors text-sm font-bold flex items-center gap-2 ${colsLocked ? 'border-amber-500/50 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20' : 'border-blue-500/50 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20'}`}
+                                    title={colsLocked ? "Desbloquear redimensionado" : "Bloquear redimensionado de celdas"}
+                                >
+                                    {colsLocked ? <Lock size={14} /> : <Unlock size={14} />}
+                                    {colsLocked ? "CELDAS BLOQUEADAS" : "BLOQUEAR CELDAS"}
+                                </button>
+                                <button
+                                    onClick={resetView}
+                                    className="px-4 py-2 rounded-full border border-blue-900/30 bg-blue-950/20 text-blue-400 font-bold hover:bg-blue-900/30 transition-colors text-sm"
+                                    title="Restablecer ancho de columnas"
+                                >
+                                    Restablecer Vista
+                                </button>
+                            </div>
                         )}
 
                         <button
@@ -585,50 +832,6 @@ export default function MasterPlan() {
                     </div>
                 </div>
 
-                {/* Producción */}
-                <div className="glass-panel p-6 rounded-2xl mb-6 border border-white/10 bg-zinc-900/50 backdrop-blur-sm">
-                    <h3 className="text-primary font-bold mb-4 uppercase text-xs tracking-wider">Parámetros de Producción</h3>
-                    <div className="flex gap-4 flex-wrap mb-6">
-                        <Field label="Horas/día" value={horasDia} onChange={setHorasDia} />
-                        <Field label="Kg/día lisas" value={kgLisas} onChange={setKgLisas} />
-                        <Field label="g por tableta lisa" value={gLisas} onChange={setGLisas} />
-                        <Field label="Kg/día hex" value={kgHex} onChange={setKgHex} />
-                        <Field label="g por tableta hex" value={gHex} onChange={setGHex} />
-                        <Field label="Kg/día polvo" value={kgPolvo} onChange={setKgPolvo} />
-                        <Field label="g por bolsa polvo" value={gBolsaPolvo} onChange={setGBolsaPolvo} />
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                        <KPI label="Lisas (pzas/día)" value={fmt0(piezasLisasDia)} />
-                        <KPI label="Lisas (pzas/h)" value={fmt0(piezasLisasHora)} />
-                        <KPI label="Hex (pzas/día)" value={fmt0(piezasHexDia)} />
-                        <KPI label="Hex (pzas/h)" value={fmt0(piezasHexHora)} />
-                        <KPI label="Polvo (bolsas/día)" value={fmt0(bolsasPolvoDia)} />
-                        <KPI label="Polvo (bolsas/h)" value={fmt1(bolsasPolvoHora)} />
-                    </div>
-                </div>
-
-                {/* Finanzas */}
-                <div className="glass-panel p-6 rounded-2xl mb-8 border border-white/10 bg-black shadow-2xl">
-                    <div className="flex gap-6 flex-wrap items-center">
-                        <FieldDark label="Tipo de cambio (MXN/USD)" value={tipoCambio} onChange={setTipoCambio} />
-                        <FieldDark label="IVA (%)" value={ivaPct} onChange={setIvaPct} />
-
-                        {isAdmin && (
-                            <div className="ml-auto flex gap-4 items-center bg-white/5 rounded-xl p-3 border border-white/5 animate-in fade-in slide-in-from-right-4 duration-300">
-                                <div className="flex gap-2 items-end">
-                                    <FieldDark label="Utilidad Global (%)" value={globalUtilidad} onChange={setGlobalUtilidad} compact />
-                                    <button
-                                        onClick={applyGlobalUtility}
-                                        className="mb-[2px] px-4 py-2 bg-primary text-black font-bold rounded-lg hover:bg-yellow-400 transition-colors text-sm shadow-lg shadow-yellow-900/20"
-                                    >
-                                        Aplicar a todo
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
 
                 {/* Secciones */}
                 <div className="space-y-8">
@@ -696,19 +899,56 @@ export default function MasterPlan() {
                                 ) : (
                                     <div className="border border-white/10 rounded-xl overflow-hidden bg-zinc-900/30 backdrop-blur-sm shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]">
                                         <div className="overflow-x-auto">
-                                            <table className="w-full text-left border-collapse min-w-[1500px]">
+                                            <table className="w-full text-left border-collapse min-w-full table-fixed">
                                                 <thead>
-                                                    <tr className="bg-primary text-black font-extrabold uppercase text-xs tracking-wider border-b border-primary/20 shadow-lg relative z-10">
-                                                        <th className="p-4 w-12 text-center text-black/80">OK</th>
-                                                        <th className="p-4 w-64 text-black">Equipo</th>
-                                                        <th className="p-4 min-w-[200px] text-black">Descripción</th>
-                                                        {isAdmin && <th className="p-4 w-24 text-black">% Utilidad</th>}
-                                                        <th className="p-4 w-24 text-black">QTY</th>
-                                                        {isAdmin && <th className="p-4 w-32 text-black">Costo (USD)</th>}
-                                                        <th className="p-4 w-32 text-black">Venta Total (USD)</th>
-                                                        {isAdmin && <th className="p-4 w-32 text-right text-black">Total Costo</th>}
-                                                        <th className="p-4 w-32 text-right text-black">Total Venta</th>
-                                                        <th className="p-4 w-12"></th>
+                                                    <tr className="sticky top-0 z-30 bg-primary/95 backdrop-blur-md text-black font-extrabold uppercase text-[10px] tracking-wider border-b border-primary/20 shadow-[inset_0_1px_rgba(255,255,255,0.4),0_4px_12px_rgba(0,0,0,0.1)]">
+                                                        <th style={{ width: colWidths.ok }} className="p-4 text-center text-black/80 relative group/th">
+                                                            OK
+                                                            {!colsLocked && <div onMouseDown={(e) => startResize('ok', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 z-10" />}
+                                                        </th>
+                                                        <th style={{ width: colWidths.equipo }} className="p-4 text-black text-center relative group/th">
+                                                            Equipo
+                                                            {!colsLocked && <div onMouseDown={(e) => startResize('equipo', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 z-10" />}
+                                                        </th>
+                                                        <th style={{ width: colWidths.descripcion }} className="p-4 text-black text-center relative group/th">
+                                                            Descripción
+                                                            {!colsLocked && <div onMouseDown={(e) => startResize('descripcion', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 z-10" />}
+                                                        </th>
+                                                        <th style={{ width: colWidths.multimedia }} className="p-4 text-black text-center relative group/th">
+                                                            Foto/Video
+                                                            {!colsLocked && <div onMouseDown={(e) => startResize('multimedia', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 z-10" />}
+                                                        </th>
+                                                        {isAdmin && (
+                                                            <th style={{ width: colWidths.utilidad }} className="p-4 text-black text-center relative group/th">
+                                                                % Utilidad
+                                                                {!colsLocked && <div onMouseDown={(e) => startResize('utilidad', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 z-10" />}
+                                                            </th>
+                                                        )}
+                                                        <th style={{ width: colWidths.qty }} className="p-4 text-black text-center relative group/th">
+                                                            QTY
+                                                            {!colsLocked && <div onMouseDown={(e) => startResize('qty', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 z-10" />}
+                                                        </th>
+                                                        {isAdmin && (
+                                                            <th style={{ width: colWidths.costo }} className="p-4 text-black text-center relative group/th">
+                                                                Costo (USD)
+                                                                {!colsLocked && <div onMouseDown={(e) => startResize('costo', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 z-10" />}
+                                                            </th>
+                                                        )}
+                                                        <th style={{ width: colWidths.precioUnit }} className="p-4 text-black text-center relative group/th">
+                                                            Precio Unit. (USD)
+                                                            {!colsLocked && <div onMouseDown={(e) => startResize('precioUnit', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 z-10" />}
+                                                        </th>
+                                                        {isAdmin && (
+                                                            <th style={{ width: colWidths.totalCosto }} className="p-4 text-right text-black relative group/th">
+                                                                Total Costo
+                                                                {!colsLocked && <div onMouseDown={(e) => startResize('totalCosto', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 z-10" />}
+                                                            </th>
+                                                        )}
+                                                        <th style={{ width: colWidths.totalVenta }} className="p-4 text-right text-black relative group/th">
+                                                            Total Venta
+                                                            {!colsLocked && <div onMouseDown={(e) => startResize('totalVenta', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 z-10" />}
+                                                        </th>
+                                                        <th className="p-4 w-12 text-center"></th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-white/5">
@@ -726,14 +966,15 @@ export default function MasterPlan() {
                                                                 </td>
 
                                                                 <td className="p-4 align-top">
-                                                                    <div className="text-xs text-primary/70 font-mono mb-1">{it.codigo}</div>
+                                                                    <div className="text-[10px] text-primary/70 font-black mb-1.5 px-px">{it.codigo}</div>
                                                                     <textarea
                                                                         value={it.equipo}
                                                                         onChange={(e) => updateItem(s.id, it.id, { equipo: e.target.value })}
-                                                                        className="w-full bg-transparent border-none p-2 -ml-2 text-white font-medium focus:ring-0 placeholder-gray-700 resize-none field-sizing-content min-h-[1.5em] leading-snug hover:text-primary hover:bg-white/5 rounded-lg transition-all duration-200"
+                                                                        readOnly={!isAdmin}
+                                                                        className={`w-full bg-transparent border-none p-2 -ml-2 text-white font-bold text-sm focus:ring-0 placeholder-gray-700 resize-none field-sizing-content leading-tight rounded-lg transition-all duration-200 overflow-hidden ${!it.activo ? 'line-through opacity-40' : ''} ${isAdmin ? 'hover:bg-white/5 focus:bg-white/5' : 'cursor-default'}`}
                                                                         placeholder="Nombre del equipo"
-                                                                        rows={1}
-                                                                        style={{ fieldSizing: "content" }}
+                                                                        rows={2}
+                                                                        style={{ minHeight: "2.8rem" }}
                                                                     />
                                                                 </td>
 
@@ -741,11 +982,79 @@ export default function MasterPlan() {
                                                                     <textarea
                                                                         value={it.descripcion}
                                                                         onChange={(e) => updateItem(s.id, it.id, { descripcion: e.target.value })}
-                                                                        className="w-full bg-transparent border-none p-2 -ml-2 text-gray-400 text-sm focus:ring-0 placeholder-gray-800 resize-none field-sizing-content min-h-[1.5em] leading-snug hover:text-primary hover:bg-white/5 rounded-lg transition-all duration-200"
+                                                                        readOnly={!isAdmin}
+                                                                        className={`w-full bg-transparent border-none p-2 -ml-2 text-gray-400 text-sm focus:ring-0 placeholder-gray-800 resize-none field-sizing-content leading-relaxed rounded-lg transition-all duration-200 overflow-hidden ${!it.activo ? 'line-through opacity-40' : ''} ${isAdmin ? 'hover:bg-white/5 focus:bg-white/5' : 'cursor-default'}`}
                                                                         placeholder="Descripción..."
-                                                                        rows={3}
-                                                                        style={{ fieldSizing: "content" }}
+                                                                        rows={4}
+                                                                        style={{ minHeight: "6rem" }}
                                                                     />
+                                                                </td>
+
+                                                                <td className="p-4 text-center align-top">
+                                                                    <div className="flex flex-col items-center gap-2">
+                                                                        {it.media_url ? (
+                                                                            <div className="relative group/media w-24 h-24 rounded-lg overflow-hidden border border-white/10 bg-black/40 shadow-lg cursor-pointer transition-transform hover:scale-105">
+                                                                                {it.media_type === 'video' ? (
+                                                                                    <div
+                                                                                        className="w-full h-full flex flex-col items-center justify-center p-2"
+                                                                                        onClick={() => setSelectedMedia({ url: it.media_url, type: 'video' })}
+                                                                                    >
+                                                                                        <Video size={24} className="text-primary mb-1" />
+                                                                                        <span className="text-[10px] text-primary/70 font-bold uppercase truncate w-full px-1">Video</span>
+                                                                                        <video src={it.media_url} className="hidden" />
+                                                                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/media:opacity-100 flex items-center justify-center transition-opacity">
+                                                                                            <Play size={24} className="text-white fill-white" />
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <img
+                                                                                        src={it.media_url}
+                                                                                        alt="Preview"
+                                                                                        className="w-full h-full object-cover"
+                                                                                        onClick={() => setSelectedMedia({ url: it.media_url, type: 'image' })}
+                                                                                    />
+                                                                                )}
+
+                                                                                {isAdmin && (
+                                                                                    <button
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            updateItem(s.id, it.id, { media_url: null, media_type: null });
+                                                                                        }}
+                                                                                        className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white hover:bg-red-500 opacity-0 group-hover/media:opacity-100 transition-opacity"
+                                                                                    >
+                                                                                        <X size={12} />
+                                                                                    </button>
+                                                                                )}
+                                                                            </div>
+                                                                        ) : (
+                                                                            isAdmin && (
+                                                                                <div className="relative">
+                                                                                    <input
+                                                                                        type="file"
+                                                                                        accept="image/*,video/*"
+                                                                                        name={`media-${it.id}`}
+                                                                                        id={`media-${it.id}`}
+                                                                                        className="hidden"
+                                                                                        onChange={(e) => handleMediaUpload(s.id, it.id, e.target.files[0])}
+                                                                                    />
+                                                                                    <label
+                                                                                        htmlFor={`media-${it.id}`}
+                                                                                        className="flex flex-col items-center justify-center w-24 h-24 rounded-lg border-2 border-dashed border-white/10 bg-white/5 hover:bg-white/10 hover:border-primary/50 transition-all cursor-pointer group/upload"
+                                                                                    >
+                                                                                        {uploadingId === it.id ? (
+                                                                                            <Loader2 size={24} className="text-primary animate-spin" />
+                                                                                        ) : (
+                                                                                            <>
+                                                                                                <Upload size={20} className="text-gray-600 group-hover/upload:text-primary mb-1 transition-colors" />
+                                                                                                <span className="text-[10px] text-gray-500 group-hover/upload:text-primary/70 font-bold uppercase">Subir</span>
+                                                                                            </>
+                                                                                        )}
+                                                                                    </label>
+                                                                                </div>
+                                                                            )
+                                                                        )}
+                                                                    </div>
                                                                 </td>
 
                                                                 {isAdmin && (
@@ -765,8 +1074,9 @@ export default function MasterPlan() {
                                                                         value={it.qty}
                                                                         min={0}
                                                                         step={1}
+                                                                        readOnly={!isAdmin}
                                                                         onChange={(e) => updateItem(s.id, it.id, { qty: n(e.target.value) })}
-                                                                        className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-white text-right font-mono focus:border-primary/50 focus:outline-none hover:border-primary hover:text-primary transition-colors"
+                                                                        className={`w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-white text-right font-mono focus:border-primary/50 focus:outline-none transition-colors ${isAdmin ? 'hover:border-primary hover:text-primary' : 'cursor-default pointer-events-none'}`}
                                                                     />
                                                                 </td>
 
@@ -786,9 +1096,9 @@ export default function MasterPlan() {
                                                                 <td className="p-4">
                                                                     <input
                                                                         type="text"
-                                                                        value={money(r.totalVenta)}
+                                                                        value={money(r.ventaUnitFinal)}
                                                                         disabled
-                                                                        className="w-full bg-transparent border-none px-2 py-1 text-primary text-right font-mono text-sm font-bold cursor-default"
+                                                                        className={`w-full bg-transparent border-none px-2 py-1 text-primary text-right font-mono text-sm font-bold cursor-default ${!it.activo ? 'line-through opacity-40' : ''}`}
                                                                     />
                                                                 </td>
 
@@ -797,7 +1107,7 @@ export default function MasterPlan() {
                                                                         {money(r.totalCosto)}
                                                                     </td>
                                                                 )}
-                                                                <td className="p-4 text-right font-mono text-primary font-bold text-sm">
+                                                                <td className={`p-4 text-right font-mono text-primary font-bold text-sm ${!it.activo ? 'line-through opacity-40' : ''}`}>
                                                                     {money(r.totalVenta)}
                                                                 </td>
 
@@ -900,6 +1210,47 @@ export default function MasterPlan() {
         }
       `}</style>
             </div>
+
+            {/* Modal de Zoom Multimedia */}
+            {selectedMedia && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-md p-4 sm:p-10"
+                    onClick={() => setSelectedMedia(null)}
+                >
+                    <button
+                        onClick={() => setSelectedMedia(null)}
+                        className="absolute top-6 right-6 p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition-all z-[110] border border-white/10 hover:rotate-90"
+                    >
+                        <X size={24} />
+                    </button>
+
+                    <div
+                        className="relative max-w-5xl w-full max-h-full flex items-center justify-center"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {selectedMedia.type === 'video' ? (
+                            <div className="w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-white/10">
+                                <video
+                                    src={selectedMedia.url}
+                                    controls
+                                    autoPlay
+                                    className="w-full h-full object-contain"
+                                />
+                            </div>
+                        ) : (
+                            <img
+                                src={selectedMedia.url}
+                                alt="Zoom"
+                                className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl border border-white/10"
+                            />
+                        )}
+
+                        <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/10 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                            Vista previa del equipo
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
