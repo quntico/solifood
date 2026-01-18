@@ -14,6 +14,7 @@ function App() {
           <Route path="/" element={<AdminLayout />} />
           <Route path="/cotizacion/:slug" element={<ClientLayout />} />
           <Route path="/solifood/master-plan" element={<MasterPlan />} />
+          <Route path="/solifood/master-plan/:slug" element={<MasterPlan />} />
         </Routes>
       </Router>
     </HelmetProvider>

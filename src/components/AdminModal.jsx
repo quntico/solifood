@@ -73,6 +73,9 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
         phase3_name: themeDataFromApp.phase3_name ?? 'Transporte',
         phase4_name: themeDataFromApp.phase4_name ?? 'Instalación y Puesta en Marcha',
         hide_banner: themeDataFromApp.hide_banner ?? false,
+        hero_video_is_integrated: themeDataFromApp.hero_video_is_integrated ?? false,
+        hero_video_scale: themeDataFromApp.hero_video_scale ?? 100,
+        hero_video_border_radius: themeDataFromApp.hero_video_border_radius ?? 20,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -314,6 +317,16 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
     if (!silent) setIsSaving(true);
 
     try {
+      const currentConfig = currentThemeData.sections_config;
+      const wrappedPayload = Array.isArray(currentConfig)
+        ? { sections: currentConfig, heroVideoUrl: currentThemeData.video_url }
+        : {
+          ...(currentConfig || {}),
+          sections: currentConfig?.sections || [],
+          heroVideoUrl: currentThemeData.video_url,
+          heroVideoUpdatedAt: new Date().toISOString()
+        };
+
       const dataToSave = {
         company: currentThemeData.company, project: currentThemeData.project, client: currentThemeData.client,
         title: currentThemeData.title, subtitle: currentThemeData.subtitle, description: currentThemeData.description,
@@ -328,24 +341,43 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
         slug: currentThemeData.slug,
         hide_banner: currentThemeData.hide_banner,
         brand_color: currentThemeData.brand_color,
+        hero_video_is_integrated: currentThemeData.hero_video_is_integrated,
+        hero_video_scale: currentThemeData.hero_video_scale,
+        hero_video_border_radius: currentThemeData.hero_video_border_radius,
+        video_url: currentThemeData.video_url,
         updated_at: new Date().toISOString(),
+        sections_config: wrappedPayload, // REDUNDANCY FALLBACK
       };
 
-      const { error } = await supabase.from('quotations').update(dataToSave).eq('theme_key', activeTheme);
-      if (error) throw error;
+      try {
+        const { error } = await supabase.from('quotations').update(dataToSave).eq('theme_key', activeTheme);
+        if (error) {
+          console.warn("[AdminModal] Save failed, checking for missing column error...", error);
+          if (error.code === '42703') {
+            console.log("[AdminModal] video_url column missing, retrying with sections_config only...");
+            const { video_url, ...safeData } = dataToSave;
+            const { error: retryError } = await supabase.from('quotations').update(safeData).eq('theme_key', activeTheme);
+            if (retryError) throw retryError;
+          } else {
+            throw error;
+          }
+        }
 
-      setThemes(prev => ({
-        ...prev,
-        [activeTheme]: { ...prev[activeTheme], ...currentThemeData }
-      }));
+        setThemes(prev => ({
+          ...prev,
+          [activeTheme]: { ...prev[activeTheme], ...currentThemeData }
+        }));
 
-      if (!silent) toast({ title: "Guardado", description: "Cambios guardados correctamente." });
-      if (closeModal) onClose();
-    } catch (error) {
-      console.error('Error saving:', error);
-      if (!silent) toast({ title: "Error al guardar", description: error.message, variant: "destructive" });
-    } finally {
-      if (!silent) setIsSaving(false);
+        if (!silent) toast({ title: "Guardado", description: "Cambios guardados correctamente." });
+        if (closeModal) onClose();
+      } catch (error) {
+        console.error('Error saving:', error);
+        if (!silent) toast({ title: "Error al guardar", description: error.message, variant: "destructive" });
+      } finally {
+        if (!silent) setIsSaving(false);
+      }
+    } catch (err) {
+      console.error("Critical error in saveChanges:", err);
     }
   };
 
@@ -367,12 +399,10 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
       const originalData = themes[activeTheme];
       if (!originalData) return;
 
-      const hasChanges =
-        originalData.project !== currentThemeData.project ||
-        originalData.client !== currentThemeData.client ||
-        originalData.company !== currentThemeData.company ||
-        originalData.description !== currentThemeData.description ||
-        originalData.banner_text !== currentThemeData.banner_text;
+      originalData.banner_text !== currentThemeData.banner_text ||
+        originalData.hero_video_is_integrated !== currentThemeData.hero_video_is_integrated ||
+        originalData.hero_video_scale !== currentThemeData.hero_video_scale ||
+        originalData.hero_video_border_radius !== currentThemeData.hero_video_border_radius;
 
       if (hasChanges) {
         saveChanges(false, true); // Silent save
@@ -380,7 +410,7 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, [currentThemeData.project, currentThemeData.client, currentThemeData.company, currentThemeData.description, currentThemeData.banner_text]);
+  }, [currentThemeData.project, currentThemeData.client, currentThemeData.company, currentThemeData.description, currentThemeData.banner_text, currentThemeData.hero_video_is_integrated, currentThemeData.hero_video_scale, currentThemeData.hero_video_border_radius]);
 
   const handleSave = () => saveChanges(true);
 

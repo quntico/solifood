@@ -13,6 +13,8 @@ import CloneModal from '@/components/CloneModal';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useToast } from '@/components/ui/use-toast';
 import { BRANDS, DEFAULT_BRAND } from '@/lib/brands';
+import { getActiveBucket } from '@/lib/bucketResolver';
+import { X, Video, Loader2 } from 'lucide-react';
 
 import PortadaSection from '@/components/sections/PortadaSection';
 import DescripcionSection from '@/components/sections/DescripcionSection';
@@ -89,9 +91,11 @@ const defaultSections = [
 const clientVisibleSections = new Set(defaultSections.filter(s => !s.adminOnly).map(s => s.id));
 
 const mergeWithDefaults = (config, themeKey) => {
-  if (!config || !Array.isArray(config)) return defaultSections;
+  // UNIVERSAL EXTRACTOR: Use sections array if wrapped in object
+  const sectionsToMerge = Array.isArray(config) ? config : (config?.sections || []);
+  if (!sectionsToMerge || sectionsToMerge.length === 0) return defaultSections;
   const defaultConfigMap = new Map(defaultSections.map(s => [s.id, s]));
-  let mergedConfig = config
+  let mergedConfig = sectionsToMerge
     .filter(s => s.id !== 'propuesta_dinamica') // Explicitly filter out prop_dinamica from DB configs
     .map(s => {
       let merged;
@@ -135,6 +139,14 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
   const [isBannerVisible, setIsBannerVisible] = useState(true);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
+  const [isFullBlackout, setIsFullBlackout] = useState(false);
+  const [isHeroVideoActive, setIsHeroVideoActive] = useState(false);
+  const [isUploadingHero, setIsUploadingHero] = useState(false);
+  const [heroVideoConfig, setHeroVideoConfig] = useState({
+    isIntegrated: false,
+    scale: 1,
+    borderRadius: 20
+  });
   const idleTimerRef = useRef(null);
   const initialDisplayTimerRef = useRef(null);
   const hasInteracted = useRef(false);
@@ -144,6 +156,16 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
 
   const quotationData = themes[activeTheme];
   const displayData = previewData ? { ...quotationData, ...previewData } : quotationData;
+
+  useEffect(() => {
+    if (displayData) {
+      setHeroVideoConfig({
+        isIntegrated: displayData.hero_video_is_integrated ?? false,
+        scale: displayData.hero_video_scale ?? 1,
+        borderRadius: displayData.hero_video_border_radius ?? 20
+      });
+    }
+  }, [displayData?.hero_video_is_integrated, displayData?.hero_video_scale, displayData?.hero_video_border_radius]);
 
   useEffect(() => {
     const processedData = {
@@ -360,7 +382,19 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
         ...prevThemes,
         [activeTheme]: { ...prevThemes[activeTheme], sections_config: sanitizedConfig },
       }));
-      const { error } = await supabase.from('quotations').update({ sections_config: sanitizedConfig }).eq('theme_key', activeTheme);
+
+      // WRAPPED SAVE: Always save as object to support metadata
+      const wrappedPayload = {
+        sections: sanitizedConfig,
+        heroVideoUrl: displayData.video_url, // Use the current video url
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('quotations')
+        .update({ sections_config: wrappedPayload })
+        .eq('theme_key', activeTheme);
+
       if (error) throw error;
     } catch (err) {
       console.error("Error saving sections config:", err);
@@ -386,7 +420,16 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
 
   if (!displayData) return null;
 
-  let menuItems = (displayData.sections_config || defaultSections).map(section => {
+  // UNIVERSAL CONFIG RESOLVER: Handle both Array (Standard) and Object (Master Plan/Defensive)
+  const config = displayData.sections_config;
+  const sectionsArray = Array.isArray(config)
+    ? config
+    : (config?.sections || defaultSections);
+
+  // Resolve Video URL from column or fallback JSON (Defensive)
+  const resolvedVideoUrl = displayData.video_url || (config && !Array.isArray(config) ? config.heroVideoUrl : null);
+
+  let menuItems = sectionsArray.map(section => {
     const cleanCompKey = (section.component || section.id).split('_copy')[0];
     // Fix for 'ventajas' label potentially being saved as the translation key
     let displayLabel = section.label;
@@ -442,19 +485,89 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
   };
 
   const handleVideoUrlUpdate = async (newUrl) => {
-    const updatedData = { ...displayData, video_url: newUrl };
+    const updatedDate = new Date().toISOString();
+
+    // REDUNDANCY: In Standard Viewer, sections_config is usually an Array of sections.
+    // We update the themes state immediately.
+    const updatedData = {
+      ...displayData,
+      video_url: newUrl,
+      updated_at: updatedDate
+    };
+
     setThemes(prev => ({
       ...prev,
       [activeTheme]: updatedData
     }));
 
-    const { error } = await supabase
-      .from('quotations')
-      .update({ video_url: newUrl })
-      .eq('theme_key', activeTheme);
+    try {
+      // Primary attempt: Save to dedicated columns.
+      // We ALSO save to sections_config as a fallback for absolute persistence.
+      const wrappedPayload = {
+        sections: sectionsArray,
+        heroVideoUrl: newUrl,
+        updated_at: updatedDate
+      };
 
-    if (error) {
+      const { error } = await supabase
+        .from('quotations')
+        .update({
+          video_url: newUrl,
+          updated_at: updatedDate,
+          sections_config: wrappedPayload
+        })
+        .eq('theme_key', activeTheme);
+
+      if (error) {
+        console.warn("[QuotationViewer] Primary save failed, retrying with wrapped config only...", error);
+        // Fallback: Save ONLY to sections_config if video_url column is missing
+        await supabase
+          .from('quotations')
+          .update({
+            sections_config: wrappedPayload
+          })
+          .eq('theme_key', activeTheme);
+      }
+    } catch (err) {
+      console.error("Critical save error in QuotationViewer:", err);
       toast({ title: "Error", description: "No se pudo guardar la URL del video.", variant: "destructive" });
+    }
+  };
+
+  const handleHeroVideoUpload = async (file) => {
+    if (!file) return;
+    setIsUploadingHero(true);
+    try {
+      const bucket = await getActiveBucket();
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${activeTheme}_hero_${Date.now()}.${fileExt}`;
+      const filePath = `hero_videos/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(filePath);
+
+      await handleVideoUrlUpdate(publicUrl);
+      toast({ title: "Video del Hero actualizado", description: "El video se ha subido correctamente." });
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Error", description: "No se pudo subir el video.", variant: "destructive" });
+    } finally {
+      setIsUploadingHero(false);
+    }
+  };
+
+  const triggerHeroVideo = () => {
+    if (resolvedVideoUrl) {
+      setIsHeroVideoActive(true);
+    } else {
+      toast({ title: "Sin video", description: "Sube un video en modo Editor para activar la animación." });
     }
   };
 
@@ -487,6 +600,13 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
         onSectionContentUpdate={setSectionsConfig}
         onVideoUrlUpdate={handleVideoUrlUpdate}
         activeTabMap={activeTabMap} // Pass active tabs
+        triggerHeroVideo={triggerHeroVideo}
+        handleHeroVideoUpload={handleHeroVideoUpload}
+        isUploadingHero={isUploadingHero}
+        isAdminAuthenticated={isAdminAuthenticated}
+        heroVideoConfig={heroVideoConfig}
+        isHeroVideoActive={isHeroVideoActive}
+        setIsHeroVideoActive={setIsHeroVideoActive}
       />
     );
   };
@@ -553,7 +673,7 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
             onDeleteSection={handleDeleteSection}
           />
         </div>
-        <div className="flex-1 flex flex-col overflow-hidden pl-[80px]">
+        <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${isSidebarCollapsed ? 'lg:pl-[80px]' : 'lg:pl-[320px]'} pl-0`}>
           <Header
             quotationData={displayData}
             onLogoClick={handleHomeClick}
@@ -579,6 +699,29 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
             {renderActiveComponent()}
           </div>
         </div>
+
+        {/* Hero Video Overlay - Simplified v2.34.2 */}
+        {isHeroVideoActive && !heroVideoConfig.isIntegrated && (
+          <div className="fixed inset-0 z-[200] bg-black flex items-center justify-center">
+            {resolvedVideoUrl && (
+              <div className="relative w-full h-full flex items-center justify-center animate-in fade-in zoom-in duration-500">
+                <video
+                  src={resolvedVideoUrl}
+                  autoPlay
+                  onEnded={() => setIsHeroVideoActive(false)}
+                  className="w-full h-full object-contain shadow-2xl shadow-primary/20"
+                />
+                <button
+                  onClick={() => setIsHeroVideoActive(false)}
+                  className="absolute top-10 right-10 p-5 rounded-full bg-white/10 text-white hover:bg-red-500 transition-all border border-white/10 group backdrop-blur-md"
+                >
+                  <X size={32} className="group-hover:rotate-90 transition-transform" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         <BottomNavBar
           sections={menuItems}
           activeSection={activeSection}

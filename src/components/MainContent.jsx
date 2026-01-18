@@ -15,11 +15,22 @@ const MainContent = ({
   activeTheme,
   onSectionContentUpdate,
   onVideoUrlUpdate,
-  activeTabMap // Receive activeTabMap
+  activeTabMap, // Receive activeTabMap
+  triggerHeroVideo,
+  handleHeroVideoUpload,
+  isUploadingHero,
+  isAdminAuthenticated,
+  heroVideoConfig,
+  isHeroVideoActive,
+  setIsHeroVideoActive
 }) => {
 
   const handleContentChange = (sectionId, newContent) => {
-    const sourceList = allSectionsData || sections;
+    // UNIVERSAL RESOLVER: Handle both Array and Wrapped Object
+    const sourceList = Array.isArray(allSectionsData)
+      ? allSectionsData
+      : (allSectionsData?.sections || sections);
+
     const newSections = sourceList.map(sec =>
       sec.id === sectionId
         ? { ...sec, content: { ...sec.content, ...newContent } }
@@ -29,7 +40,10 @@ const MainContent = ({
   };
 
   const handleSectionContentChange = (sectionId, newContent) => {
-    const sourceList = allSectionsData || sections;
+    const sourceList = Array.isArray(allSectionsData)
+      ? allSectionsData
+      : (allSectionsData?.sections || sections);
+
     const newSections = sourceList.map(sec =>
       sec.id === sectionId ? { ...sec, content: newContent } : sec
     );
@@ -37,7 +51,10 @@ const MainContent = ({
   };
 
   const handleSectionDataChange = (sectionId, newSectionData) => {
-    const sourceList = allSectionsData || sections;
+    const sourceList = Array.isArray(allSectionsData)
+      ? allSectionsData
+      : (allSectionsData?.sections || sections);
+
     const newSections = sourceList.map(sec =>
       sec.id === sectionId ? { ...sec, ...newSectionData } : sec
     );
@@ -52,9 +69,13 @@ const MainContent = ({
         const Component = section.Component;
         if (!Component) return null;
 
+        const config = quotationData.sections_config;
+        const sectionsArrayData = Array.isArray(config) ? config : (config?.sections || []);
+
+        const savedData = sectionsArrayData.find(s => s.id === section.id);
         const sectionDataWithContent = {
-          ...(quotationData.sections_config || []).find(s => s.id === section.id),
           ...section,
+          ...savedData,
         };
 
         const props = {
@@ -68,6 +89,15 @@ const MainContent = ({
           activeTab: activeTabMap ? activeTabMap[section.id] : undefined, // Pass activeTab
           ...(section.id === 'propuesta' && { sections: allSections }),
           ...(section.id === 'video' && { onVideoUrlUpdate }),
+          ...(section.id === 'portada' && {
+            triggerHeroVideo,
+            handleHeroVideoUpload,
+            isUploadingHero,
+            isAdminAuthenticated,
+            heroVideoConfig,
+            isHeroVideoActive,
+            setIsHeroVideoActive
+          }),
         };
 
         return (

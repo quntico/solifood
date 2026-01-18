@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import * as XLSX from 'xlsx';
 import { supabase } from "@/lib/customSupabaseClient";
 import { getActiveBucket } from "@/lib/bucketResolver";
-import { Camera, Video, Image as ImageIcon, X, Maximize2, Upload, Loader2, Play, Lock, Unlock, Settings, AlignLeft, AlignJustify } from "lucide-react";
+import { Camera, Video, Image as ImageIcon, X, Check, Maximize2, Upload, Loader2, Play, Lock, Unlock, Settings, AlignLeft, AlignJustify, Calendar, User, Briefcase, ChevronRight, ChevronDown, ChevronsDown, ChevronsRight } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
     Dialog,
     DialogContent,
@@ -12,8 +13,11 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 
 const STORAGE_KEY = "solifood_masterplan_v1_autonomo";
+const DEFAULT_CLOUD_SLUG = "master-plan";
 
 const n = (v) => {
     const x = Number(v);
@@ -33,29 +37,27 @@ const initialSections = [
         titulo: "1. Línea de cacao (desde grano) · Selección → Tostado → Descascarillado → Molienda → Prensado",
         tag: "Oferta LST · Bean to Powder 200–300 kg/h",
         items: [
-            // LST (tal cual tabla de cotización)
-            { id: uid(), activo: true, codigo: "1.1", equipo: "Máquina seleccionadora de grano de cacao", descripcion: "Separación/limpieza por etapas (winnowing) para eficiencia.", fuente: "LST", qty: 1, costoUSD: 5000, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "1.2", equipo: "Elevador/cargador tipo Z para 2 tostadores", descripcion: "Carga automática para alimentar 2 tostadores.", fuente: "LST", qty: 1, costoUSD: 8000, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "1.3", equipo: "Tostadores a gas (roasting machine)", descripcion: "Tostado controlado por lotes (según oferta).", fuente: "LST", qty: 2, costoUSD: 10000, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "1.4", equipo: "Placas de enfriamiento (cooling plate)", descripcion: "Enfriado de cacao tostado para estabilizar proceso.", fuente: "LST", qty: 2, costoUSD: 4800, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "1.5", equipo: "Cargadores por vacío (vacuum loading)", descripcion: "Transporte/carga para grano tostado y nibs (según oferta).", fuente: "LST", qty: 2, costoUSD: 4600, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "1.6", equipo: "Tanques de almacenamiento para grano/nibs", descripcion: "Pulmón/almacenamiento para continuidad de línea.", fuente: "LST", qty: 2, costoUSD: 4200, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "1.7", equipo: "Descascarilladora + aventadora (peeling & winnowing)", descripcion: "Separación de cáscara y obtención de nibs.", fuente: "LST", qty: 1, costoUSD: 12000, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "1.8", equipo: "Cargadores por vacío para nibs (vacuum loading)", descripcion: "Transporte de nibs a molienda/almacenamiento (según oferta).", fuente: "LST", qty: 2, costoUSD: 4600, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "1.9", equipo: "Tanques de almacenamiento de nibs", descripcion: "Pulmón dedicado para nibs previo a molienda.", fuente: "LST", qty: 2, costoUSD: 4200, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "1.10", equipo: "Molino de bolas 1ª molienda (nibs → pasta/licor)", descripcion: "Molienda inicial de nibs para formar cocoa mass.", fuente: "LST", qty: 1, costoUSD: 40000, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "1.11", equipo: "Chiller de agua 15 HP", descripcion: "Enfriamiento para estabilidad térmica (según oferta).", fuente: "LST", qty: 1, costoUSD: 10000, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "1.12", equipo: "Tanques almacenamiento pasta/chocolate", descripcion: "Tanques jacketed para cocoa mass/chocolate (según oferta).", fuente: "LST", qty: 2, costoUSD: 5500, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "1.13", equipo: "Bombas para chocolate (Durex)", descripcion: "Bombeo sanitario de chocolate/pasta (según oferta).", fuente: "LST", qty: 2, costoUSD: 2300, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "1.14", equipo: "Prensa de licor (oil press) · 3 sets", descripcion: "Prensado para obtener manteca de cacao + torta.", fuente: "LST", qty: 3, costoUSD: 14000, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "1.15", equipo: "Tanque de manteca de cacao", descripcion: "Almacenamiento de cocoa butter para formulación.", fuente: "LST", qty: 1, costoUSD: 5500, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "1.16", equipo: "Bomba para manteca", descripcion: "Transferencia de cocoa butter a proceso.", fuente: "LST", qty: 1, costoUSD: 2300, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "1.17", equipo: "Crusher de torta de cacao", descripcion: "Rompedor de torta tras prensado.", fuente: "LST", qty: 1, costoUSD: 4500, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "1.18", equipo: "Molino/pulverizador de cacao (cocoa powder grinder)", descripcion: "Pulveriza torta para cacao en polvo base.", fuente: "LST", qty: 1, costoUSD: 6500, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "1.19", equipo: "Tubería chaquetada para chocolate (50 m)", descripcion: "Pipe jacketed para transferencia térmica controlada.", fuente: "LST", qty: 50, costoUSD: 120, ventaUSD: 0 },
+            { id: uid(), activo: true, codigo: "1.1", equipo: "Máquina seleccionadora de grano de cacao", descripcion: "Separación/limpieza por etapas (winnowing) para eficiencia.", fuente: "LST", qty: 1, costoUSD: 5000, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "1.2", equipo: "Elevador/cargador tipo Z para 2 tostadores", descripcion: "Carga automática para alimentar 2 tostadores.", fuente: "LST", qty: 1, costoUSD: 8000, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "1.3", equipo: "Tostadores a gas (roasting machine)", descripcion: "Tostado controlado por lotes (según oferta).", fuente: "LST", qty: 2, costoUSD: 10000, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "1.4", equipo: "Placas de enfriamiento (cooling plate)", descripcion: "Enfriado de cacao tostado para estabilizar proceso.", fuente: "LST", qty: 2, costoUSD: 4800, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "1.5", equipo: "Cargadores por vacío (vacuum loading)", descripcion: "Transporte/carga para grano tostado y nibs (según oferta).", fuente: "LST", qty: 2, costoUSD: 4600, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "1.6", equipo: "Tanques de almacenamiento para grano/nibs", descripcion: "Pulmón/almacenamiento para continuidad de línea.", fuente: "LST", qty: 2, costoUSD: 4200, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "1.7", equipo: "Descascarilladora + aventadora (peeling & winnowing)", descripcion: "Separación de cáscara y obtención de nibs.", fuente: "LST", qty: 1, costoUSD: 12000, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "1.8", equipo: "Cargadores por vacío para nibs (vacuum loading)", descripcion: "Transporte de nibs a molienda/almacenamiento (según oferta).", fuente: "LST", qty: 2, costoUSD: 4600, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "1.9", equipo: "Tanques de almacenamiento de nibs", descripcion: "Pulmón dedicado para nibs previo a molienda.", fuente: "LST", qty: 2, costoUSD: 4200, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "1.10", equipo: "Molino de bolas 1ª molienda (nibs → pasta/licor)", descripcion: "Molienda inicial de nibs para formar cocoa mass.", fuente: "LST", qty: 1, costoUSD: 40000, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "1.11", equipo: "Chiller de agua 15 HP", descripcion: "Enfriamiento para estabilidad térmica (según oferta).", fuente: "LST", qty: 1, costoUSD: 10000, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "1.12", equipo: "Tanques almacenamiento pasta/chocolate", descripcion: "Tanques jacketed para cocoa mass/chocolate (según oferta).", fuente: "LST", qty: 2, costoUSD: 5500, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "1.13", equipo: "Bombas para chocolate (Durex)", descripcion: "Bombeo sanitario de chocolate/pasta (según oferta).", fuente: "LST", qty: 2, costoUSD: 2300, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "1.14", equipo: "Prensa de licor (oil press) · 3 sets", descripcion: "Prensado para obtener manteca de cacao + torta.", fuente: "LST", qty: 3, costoUSD: 14000, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "1.15", equipo: "Tanque de manteca de cacao", descripcion: "Almacenamiento de cocoa butter para formulación.", fuente: "LST", qty: 1, costoUSD: 5500, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "1.16", equipo: "Bomba para manteca", descripcion: "Transferencia de cocoa butter a proceso.", fuente: "LST", qty: 1, costoUSD: 2300, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "1.17", equipo: "Crusher de torta de cacao", descripcion: "Rompedor de torta tras prensado.", fuente: "LST", qty: 1, costoUSD: 4500, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "1.18", equipo: "Molino/pulverizador de cacao (cocoa powder grinder)", descripcion: "Pulveriza torta para cacao en polvo base.", fuente: "LST", qty: 1, costoUSD: 6500, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "1.19", equipo: "Tubería chaquetada para chocolate (50 m)", descripcion: "Pipe jacketed para transferencia térmica controlada.", fuente: "LST", qty: 50, costoUSD: 120, ventaUSD: 0, utilidad: 10 },
         ],
     },
-
     {
         id: "sec_polvo_bebida",
         collapsed: false,
@@ -63,15 +65,14 @@ const initialSections = [
         titulo: "2. Chocolate en polvo para bebida (mezcla con leche) · Formulación → Mezclado → (Opcional) Instantizado",
         tag: "Pendiente de cotizar (requerido para tu SKU de bebida)",
         items: [
-            { id: uid(), activo: true, codigo: "2.1", equipo: "Tolvas para azúcar / leche en polvo / cacao en polvo base", descripcion: "Almacenamiento y alimentación controlada de ingredientes secos.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "2.2", equipo: "Sistema de pesaje y dosificación de ingredientes secos", descripcion: "Dosificación por receta para repetibilidad de mezcla.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "2.3", equipo: "Mezcladora tipo ribbon/paddle (grado alimenticio)", descripcion: "Mezcla homogénea (cacao + azúcar + leche en polvo + aditivos).", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "2.4", equipo: "Tamiz / desaglomerador", descripcion: "Elimina grumos y controla granulometría final.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "2.5", equipo: "Sistema de instantizado (opcional recomendado)", descripcion: "Mejora humectación/disolución con lecitina (menos grumos al mezclar con leche).", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "2.6", equipo: "Colector de polvo / filtración", descripcion: "Control de polvo por higiene, merma y seguridad.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0 },
+            { id: uid(), activo: true, codigo: "2.1", equipo: "Tolvas para azúcar / leche en polvo / cacao en polvo base", descripcion: "Almacenamiento y alimentación controlada de ingredientes secos.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "2.2", equipo: "Sistema de pesaje y dosificación de ingredientes secos", descripcion: "Dosificación por receta para repetibilidad de mezcla.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "2.3", equipo: "Mezcladora tipo ribbon/paddle (grado alimenticio)", descripcion: "Mezcla homogénea (cacao + azúcar + leche en polvo + aditivos).", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "2.4", equipo: "Tamiz / desaglomerador", descripcion: "Elimina grumos y controla granulometría final.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "2.5", equipo: "Sistema de instantizado (opcional recomendado)", descripcion: "Mejora humectación/disolución con lecitina (menos grumos al mezclar con leche).", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "2.6", equipo: "Colector de polvo / filtración", descripcion: "Control de polvo por higiene, merma y seguridad.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0, utilidad: 10 },
         ],
     },
-
     {
         id: "sec_empaque_polvo",
         collapsed: false,
@@ -79,10 +80,9 @@ const initialSections = [
         titulo: "3. Empaque de polvos · Bolsa 400 g",
         tag: "Oferta PKW-130",
         items: [
-            { id: uid(), activo: true, codigo: "3.1", equipo: "Línea de empaquetado de polvos PKW-130 (completa)", descripcion: "Empaque para chocolate en polvo (bolsa 400 g). Total oferta: 29,000 USD.", fuente: "PKW-130", qty: 1, costoUSD: 29000, ventaUSD: 0 },
+            { id: uid(), activo: true, codigo: "3.1", equipo: "Línea de empaquetado de polvos PKW-130 (completa)", descripcion: "Empaque para chocolate en polvo (bolsa 400 g). Total oferta: 29,000 USD.", fuente: "PKW-130", qty: 1, costoUSD: 29000, ventaUSD: 0, utilidad: 10 },
         ],
     },
-
     {
         id: "sec_tabletas",
         collapsed: false,
@@ -90,30 +90,22 @@ const initialSections = [
         titulo: "4. Tabletas (2 líneas) · Templado → Moldeo → Vibrado → Enfriado → Desmolde",
         tag: "Oferta Mini Chocolate Molding Line (ajustada a 2 líneas) + 1 Foil",
         items: [
-            // Compartidos (1 set)
-            { id: uid(), activo: true, codigo: "4.1", equipo: "Fundidor de grasa/manteca (fat melter)", descripcion: "Tanque 1000 L con pesaje + bomba (según oferta).", fuente: "Mini Molding", qty: 1, costoUSD: 8800, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "4.2", equipo: "Cargador de polvos (powder loader)", descripcion: "Carga de azúcar/cacao en polvo para formulación (según oferta).", fuente: "Mini Molding", qty: 1, costoUSD: 4500, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "4.3", equipo: "Molino de bolas para chocolate (ball mill) 300 kg/batch", descripcion: "Refinado por batch (según oferta).", fuente: "Mini Molding", qty: 1, costoUSD: 21500, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "4.4", equipo: "Chiller de agua 5 HP", descripcion: "Enfriamiento para sistema (según oferta).", fuente: "Mini Molding", qty: 1, costoUSD: 4000, ventaUSD: 0 },
-
-            // DOBLE (2 líneas)
-            { id: uid(), activo: true, codigo: "4.5", equipo: "Sistema de alimentación de chocolate (tanque + bomba + control)", descripcion: "Tanque 500 kg + bomba + control (x2 líneas).", fuente: "Mini Molding", qty: 2, costoUSD: 7000, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "4.6", equipo: "Templadora 100 kg/batch", descripcion: "Templado por batch (x2 líneas).", fuente: "Mini Molding", qty: 2, costoUSD: 14000, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "4.7", equipo: "Cargador de moldes + calentador (mould loader & heater)", descripcion: "Carga automática de moldes a calentador (x2 líneas).", fuente: "Mini Molding", qty: 2, costoUSD: 6200, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "4.8", equipo: "Depositador One-Shot (mini depositor)", descripcion: "Sistema Delta/Schneider (x2 líneas).", fuente: "Mini Molding", qty: 2, costoUSD: 20500, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "4.9", equipo: "Vibrador", descripcion: "Elimina burbujas (x2 líneas).", fuente: "Mini Molding", qty: 2, costoUSD: 5200, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "4.10", equipo: "Túnel de enfriamiento vertical", descripcion: "Capacidad 180 moldes, con chiller 8HP (x2 líneas).", fuente: "Mini Molding", qty: 2, costoUSD: 31000, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "4.11", equipo: "Desmoldeador (demoulder) (opcional en oferta)", descripcion: "Voltea/knock de molde y regresa (x2 líneas).", fuente: "Mini Molding", qty: 2, costoUSD: 20500, ventaUSD: 0 },
-
-            // Moldes/herramental (2 tipos: lisa + hex)
-            { id: uid(), activo: true, codigo: "4.12", equipo: "Moldes (200 pcs por línea aprox.)", descripcion: "Se asume 400 pcs totales para 2 líneas/2 formas (ajustable).", fuente: "Mini Molding", qty: 400, costoUSD: 8, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "4.13", equipo: "Herramental / tooling (2 sets)", descripcion: "1 set por cada forma de molde (lisa + hex).", fuente: "Mini Molding", qty: 2, costoUSD: 800, ventaUSD: 0 },
-
-            // Empaque foil SOLO 1 línea (como acordamos)
-            { id: uid(), activo: true, codigo: "4.14", equipo: "Envolvedora foil (foil wrapping machine)", descripcion: "1 sola línea de foil para tabletas lisas. Costo: 118,000 USD.", fuente: "Mini Molding", qty: 1, costoUSD: 118000, ventaUSD: 0 },
+            { id: uid(), activo: true, codigo: "4.1", equipo: "Fundidor de grasa/manteca (fat melter)", descripcion: "Tanque 1000 L con pesaje + bomba (según oferta).", fuente: "Mini Molding", qty: 1, costoUSD: 8800, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "4.2", equipo: "Cargador de polvos (powder loader)", descripcion: "Carga de azúcar/cacao en polvo para formulación (según oferta).", fuente: "Mini Molding", qty: 1, costoUSD: 4500, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "4.3", equipo: "Molino de bolas para chocolate (ball mill) 300 kg/batch", descripcion: "Refinado por batch (según oferta).", fuente: "Mini Molding", qty: 1, costoUSD: 21500, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "4.4", equipo: "Chiller de agua 5 HP", descripcion: "Enfriamiento para sistema (según oferta).", fuente: "Mini Molding", qty: 1, costoUSD: 4000, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "4.5", equipo: "Sistema de alimentación de chocolate (tanque + bomba + control)", descripcion: "Tanque 500 kg + bomba + control (x2 líneas).", fuente: "Mini Molding", qty: 2, costoUSD: 7000, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "4.6", equipo: "Templadora 100 kg/batch", descripcion: "Templado por batch (x2 líneas).", fuente: "Mini Molding", qty: 2, costoUSD: 14000, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "4.7", equipo: "Cargador de moldes + calentador (mould loader & heater)", descripcion: "Carga automática de moldes a calentador (x2 líneas).", fuente: "Mini Molding", qty: 2, costoUSD: 6200, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "4.8", equipo: "Depositador One-Shot (mini depositor)", descripcion: "Sistema Delta/Schneider (x2 líneas).", fuente: "Mini Molding", qty: 2, costoUSD: 20500, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "4.9", equipo: "Vibrador", descripcion: "Elimina burbujas (x2 líneas).", fuente: "Mini Molding", qty: 2, costoUSD: 5200, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "4.10", equipo: "Túnel de enfriamiento vertical", descripcion: "Capacidad 180 moldes, con chiller 8HP (x2 líneas).", fuente: "Mini Molding", qty: 2, costoUSD: 31000, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "4.11", equipo: "Desmoldeador (demoulder) (opcional en oferta)", descripcion: "Voltea/knock de molde y regresa (x2 líneas).", fuente: "Mini Molding", qty: 2, costoUSD: 20500, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "4.12", equipo: "Moldes (200 pcs por línea aprox.)", descripcion: "Se asume 400 pcs totales para 2 líneas/2 formas (ajustable).", fuente: "Mini Molding", qty: 400, costoUSD: 8, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "4.13", equipo: "Herramental / tooling (2 sets)", descripcion: "1 set por cada forma de molde (lisa + hex).", fuente: "Mini Molding", qty: 2, costoUSD: 800, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "4.14", equipo: "Envolvedora foil (foil wrapping machine)", descripcion: "1 sola línea de foil para tabletas lisas. Costo: 118,000 USD.", fuente: "Mini Molding", qty: 1, costoUSD: 118000, ventaUSD: 0, utilidad: 10 },
         ],
     },
-
     {
         id: "sec_hex",
         collapsed: false,
@@ -121,12 +113,11 @@ const initialSections = [
         titulo: "5. Empaque de tabletas hexagonales · Encartonado hex",
         tag: "Pendiente de cotizar (tu otra presentación)",
         items: [
-            { id: uid(), activo: true, codigo: "5.1", equipo: "Formadora/encartonadora de caja hexagonal", descripcion: "Formado y cierre de caja hex.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "5.2", equipo: "Alimentación/insertado de tableta + cierre", descripcion: "Inserta tableta, cierra y expulsa.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "5.3", equipo: "Etiquetado/impresión lote (si aplica)", descripcion: "Trazabilidad y presentación.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0 },
+            { id: uid(), activo: true, codigo: "5.1", equipo: "Formadora/encartonadora de caja hexagonal", descripcion: "Formado y cierre de caja hex.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "5.2", equipo: "Alimentación/insertado de tableta + cierre", descripcion: "Inserta tableta, cierra y expulsa.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "5.3", equipo: "Etiquetado/impresión lote (si aplica)", descripcion: "Trazabilidad y presentación.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0, utilidad: 10 },
         ],
     },
-
     {
         id: "sec_utilidades",
         collapsed: false,
@@ -134,196 +125,63 @@ const initialSections = [
         titulo: "6. Utilidades mínimas (planta)",
         tag: "Pendiente (no inflar: queda en 0 hasta cotizar)",
         items: [
-            { id: uid(), activo: true, codigo: "6.1", equipo: "Aire comprimido (compresor + secador + tanque)", descripcion: "Actuadores y empaque.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "6.2", equipo: "Extracción de polvo / filtros", descripcion: "Zona de mezcla de polvos e higiene.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0 },
-            { id: uid(), activo: true, codigo: "6.3", equipo: "HVAC / control de temperatura", descripcion: "Estabilidad del chocolate/áreas críticas.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0 },
+            { id: uid(), activo: true, codigo: "6.1", equipo: "Aire comprimido (compresor + secador + tanque)", descripcion: "Actuadores y empaque.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "6.2", equipo: "Extracción de polvo / filtros", descripcion: "Zona de mezcla de polvos e higiene.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0, utilidad: 10 },
+            { id: uid(), activo: true, codigo: "6.3", equipo: "HVAC / control de temperatura", descripcion: "Estabilidad del chocolate/áreas críticas.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0, utilidad: 10 },
         ],
     },
 ];
 
 export default function MasterPlan() {
+    const { slug } = useParams();
+    const CLOUD_SLUG = slug || DEFAULT_CLOUD_SLUG;
     const navigate = useNavigate();
-    // Producción (header)
+    const { toast } = useToast();
     const [horasDia, setHorasDia] = useState(16);
     const [kgLisas, setKgLisas] = useState(800);
     const [gLisas, setGLisas] = useState(20);
-
     const [kgHex, setKgHex] = useState(800);
     const [gHex, setGHex] = useState(90);
-
     const [kgPolvo, setKgPolvo] = useState(400);
     const [gBolsaPolvo, setGBolsaPolvo] = useState(400);
-
-    // Finanzas
     const [tipoCambio, setTipoCambio] = useState(18.5);
     const [ivaPct, setIvaPct] = useState(16);
-
-    // “Fórmula extra” opcional
-    const [margenPct, setMargenPct] = useState(10);
     const [isAdmin, setIsAdmin] = useState(false);
-    const { toast } = useToast();
     const [uploadingId, setUploadingId] = useState(null);
     const [selectedMedia, setSelectedMedia] = useState(null);
-    const [colsLocked, setColsLocked] = useState(() => {
-        return localStorage.getItem("solifood_masterplan_colsLocked") === "true";
-    });
+    const [colsLocked, setColsLocked] = useState(() => localStorage.getItem("solifood_masterplan_colsLocked") === "true");
     const [isParamsModalOpen, setIsParamsModalOpen] = useState(false);
 
-    useEffect(() => {
-        localStorage.setItem("solifood_masterplan_colsLocked", colsLocked);
-    }, [colsLocked]);
+    const [clientName, setClientName] = useState(() => localStorage.getItem("solifood_mp_client") || "YADIRA RAMIREZ");
+    const [projectName, setProjectName] = useState(() => localStorage.getItem("solifood_mp_project") || "CDA 2000");
+    const [projectDesc, setProjectDesc] = useState(() => localStorage.getItem("solifood_mp_desc") || "Proyecto desde grano + 2 líneas de tabletas + polvo bebida + empaque.");
+    const [projectDate, setProjectDate] = useState(() => localStorage.getItem("solifood_mp_date") || new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' }));
+
+    const [mpTitle, setMpTitle] = useState(() => localStorage.getItem("solifood_mp_title") || "MASTER PLAN");
+    const [mpSubTitle, setMpSubTitle] = useState(() => localStorage.getItem("solifood_mp_subtitle") || "INDUSTRIAL CENTER");
+    const [heroVideoUrl, setHeroVideoUrl] = useState(() => localStorage.getItem("solifood_mp_hero_video") || "");
+    const [isHeroVideoActive, setIsHeroVideoActive] = useState(false);
+    const [heroVideoIsIntegrated, setHeroVideoIsIntegrated] = useState(() => localStorage.getItem("solifood_mp_hero_integrated") === "true");
+    const [heroVideoScale, setHeroVideoScale] = useState(() => Number(localStorage.getItem("solifood_mp_hero_scale")) || 100);
+    const [heroVideoBorderRadius, setHeroVideoBorderRadius] = useState(() => Number(localStorage.getItem("solifood_mp_hero_radius")) || 20);
+    const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+    const [lastCloudSync, setLastCloudSync] = useState(null);
+    const [tableFontSize, setTableFontSize] = useState(() => Number(localStorage.getItem("solifood_mp_table_font_size")) || 14);
+    const [isHydrated, setIsHydrated] = useState(false); // Guard to prevent overwriting cloud data with defaults
+
+    const heroVideoInputRef = useRef(null);
+    const fileInputRef = useRef(null);
+    const tableRefs = useRef({});
+    const headerRefs = useRef({});
 
     const [colWidths, setColWidths] = useState(() => {
         try {
             const saved = localStorage.getItem("solifood_masterplan_colWidths_v2");
             return saved ? JSON.parse(saved) : {
-                ok: 50,
-                equipo: 300,
-                descripcion: 450,
-                multimedia: 140,
-                utilidad: 90,
-                qty: 80,
-                costo: 130,
-                precioUnit: 130,
-                totalCosto: 130,
-                totalVenta: 130
+                item: 80, equipo: 250, descripcion: 350, media: 120, qty: 80, costo: 130, util: 80, unitario: 140, total: 160, action: 60
             };
-        } catch { return {}; }
+        } catch { return { item: 80, equipo: 250, descripcion: 350, media: 120, qty: 80, costo: 130, util: 80, unitario: 140, total: 160, action: 60 }; }
     });
-
-    useEffect(() => {
-        localStorage.setItem("solifood_masterplan_colWidths_v2", JSON.stringify(colWidths));
-    }, [colWidths]);
-
-    const resizeRef = useRef({ col: null, startX: 0, startWidth: 0 });
-
-    const startResize = (col, e) => {
-        if (colsLocked) return;
-        e.preventDefault();
-        resizeRef.current = {
-            col,
-            startX: e.pageX,
-            startWidth: colWidths[col] || 100
-        };
-        document.addEventListener("mousemove", handleResize);
-        document.addEventListener("mouseup", stopResize);
-        document.body.style.cursor = 'col-resize';
-        document.body.style.userSelect = 'none';
-    };
-
-    const handleResize = (e) => {
-        const { col, startX, startWidth } = resizeRef.current;
-        if (!col) return;
-        const diff = e.pageX - startX;
-        setColWidths(prev => ({
-            ...prev,
-            [col]: Math.max(40, startWidth + diff)
-        }));
-    };
-
-    const stopResize = () => {
-        document.removeEventListener("mousemove", handleResize);
-        document.removeEventListener("mouseup", stopResize);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        resizeRef.current = { col: null, startX: 0, startWidth: 0 };
-    };
-
-    const resetView = () => {
-        if (!confirm("¿Restablecer el tamaño de las columnas a los valores predeterminados?")) return;
-        localStorage.removeItem("solifood_masterplan_colWidths_v2");
-        setColWidths({
-            ok: 50,
-            equipo: 300,
-            descripcion: 450,
-            multimedia: 140,
-            utilidad: 90,
-            qty: 80,
-            costo: 130,
-            precioUnit: 130,
-            totalCosto: 130,
-            totalVenta: 130
-        });
-    };
-
-    const handleMediaUpload = async (sectionId, itemId, file) => {
-        if (!file) return;
-        setUploadingId(itemId);
-        try {
-            const bucket = await getActiveBucket();
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${sectionId}_${itemId}_${Date.now()}.${fileExt}`;
-            const filePath = `masterplan/${fileName}`;
-
-            const { error: uploadError } = await supabase.storage
-                .from(bucket)
-                .upload(filePath, file);
-
-            if (uploadError) throw uploadError;
-
-            const { data: { publicUrl } } = supabase.storage
-                .from(bucket)
-                .getPublicUrl(filePath);
-
-            updateItem(sectionId, itemId, {
-                media_url: publicUrl,
-                media_type: file.type.startsWith('video') ? 'video' : 'image'
-            });
-        } catch (error) {
-            console.error("Error uploading media:", error);
-            alert("Error al subir archivo");
-        } finally {
-            setUploadingId(null);
-        }
-    };
-    const [autoMargen, setAutoMargen] = useState(true);
-    const [globalUtilidad, setGlobalUtilidad] = useState(10);
-
-    const toggleAdmin = () => {
-        if (isAdmin) {
-            setIsAdmin(false);
-        } else {
-            const pwd = prompt("Ingrese clave de administrador:");
-            if (pwd === "2020") {
-                setIsAdmin(true);
-            } else {
-                alert("Clave incorrecta");
-            }
-        }
-    };
-
-    const applyGlobalUtility = () => {
-        if (!confirm(`¿Aplicar ${globalUtilidad}% de utilidad a TODOS los equipos?`)) return;
-        setSections(prev => prev.map(s => ({
-            ...s,
-            items: s.items.map(it => ({ ...it, utilidad: n(globalUtilidad) }))
-        })));
-    };
-
-    function calcItem(it) {
-        const costoUnit = n(it.costoUSD);
-        const qty = n(it.qty);
-        const util = n(it.utilidad);
-
-        // Formula: Markup calculation (Requested by User)
-        // Price = Cost * (1 + Util%)
-        let ventaUnitFinal = 0;
-        ventaUnitFinal = costoUnit * (1 + (util / 100));
-
-        if (!Number.isFinite(ventaUnitFinal) || ventaUnitFinal < 0) ventaUnitFinal = 0;
-
-        const totalCosto = costoUnit * qty;
-        const totalVenta = ventaUnitFinal * qty;
-
-        return {
-            costoUnit,
-            ventaUnitFinal,
-            totalCosto,
-            totalVenta
-        };
-    };
-
-
 
     const [sections, setSections] = useState(() => {
         try {
@@ -331,302 +189,375 @@ export default function MasterPlan() {
             if (!raw) return initialSections;
             const parsed = JSON.parse(raw);
             return parsed?.length ? parsed : initialSections;
-        } catch {
-            return initialSections;
-        }
+        } catch { return initialSections; }
     });
 
     useEffect(() => {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(sections));
-    }, [sections]);
+        if (!isHydrated) return; // Prevent saving until we have fetched or decided we are the source of truth
 
-    // ... (rest of functions)
+        console.log("[MasterPlan] Syncing to LocalStorage");
+        localStorage.setItem("solifood_mp_client", clientName);
+        localStorage.setItem("solifood_mp_project", projectName);
+        localStorage.setItem("solifood_mp_desc", projectDesc);
+        localStorage.setItem("solifood_mp_date", projectDate);
+        localStorage.setItem("solifood_mp_title", mpTitle);
+        localStorage.setItem("solifood_mp_subtitle", mpSubTitle);
+        localStorage.setItem("solifood_mp_hero_video", heroVideoUrl);
+        localStorage.setItem("solifood_mp_hero_integrated", heroVideoIsIntegrated);
+        localStorage.setItem("solifood_mp_hero_scale", heroVideoScale);
+        localStorage.setItem("solifood_mp_hero_radius", heroVideoBorderRadius);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(sections));
+        localStorage.setItem("solifood_masterplan_colsLocked", colsLocked);
+        localStorage.setItem("solifood_masterplan_colWidths_v2", JSON.stringify(colWidths));
+        localStorage.setItem("solifood_mp_table_font_size", tableFontSize);
+    }, [clientName, projectName, projectDesc, projectDate, mpTitle, mpSubTitle, heroVideoUrl, heroVideoIsIntegrated, heroVideoScale, heroVideoBorderRadius, sections, colsLocked, colWidths, tableFontSize, isHydrated]);
+
+    const fetchCloudData = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('quotations')
+                .select('*')
+                .eq('slug', CLOUD_SLUG)
+                .single();
+
+            if (error && error.code !== 'PGRST116') throw error;
+
+            if (data) {
+                const config = data.sections_config || {};
+                console.log("[MasterPlan] Cloud data found:", data);
+
+                if (config.clientName) setClientName(config.clientName);
+                if (config.projectName) setProjectName(config.projectName);
+                if (config.projectDesc) setProjectDesc(config.projectDesc);
+                if (config.projectDate) setProjectDate(config.projectDate);
+                if (config.mpTitle) setMpTitle(config.mpTitle);
+                if (config.mpSubTitle) setMpSubTitle(config.mpSubTitle);
+
+                // HYDRATION PROTECTION: Check both column and config
+                const cloudVideoUrl = data.video_url || config.heroVideoUrl;
+                if (cloudVideoUrl) {
+                    setHeroVideoUrl(cloudVideoUrl);
+                } else {
+                    console.log("[MasterPlan] No cloud video found, keeping local:", heroVideoUrl);
+                }
+
+                if (config.heroVideoIsIntegrated !== undefined) setHeroVideoIsIntegrated(config.heroVideoIsIntegrated);
+                if (config.heroVideoScale) setHeroVideoScale(config.heroVideoScale);
+                if (config.heroVideoBorderRadius) setHeroVideoBorderRadius(config.heroVideoBorderRadius);
+                if (config.tableFontSize) setTableFontSize(config.tableFontSize);
+
+                // UNIVERSAL RESOLVER: Handle sections if wrapped in an object
+                const sectionsToSet = Array.isArray(config.sections) ? config.sections : (Array.isArray(config) ? config : null);
+                if (sectionsToSet) setSections(sectionsToSet);
+
+                setLastCloudSync(new Date());
+            } else {
+                console.log("[MasterPlan] No cloud data, using defaults.");
+            }
+            setIsHydrated(true);
+        } catch (error) {
+            console.error("Error fetching cloud data:", error);
+            setIsHydrated(true); // Still hydrate to allow local edits if cloud fails
+        }
+    };
+
+    const saveToCloud = async (overrideConfig = null) => {
+        setIsCloudSyncing(true);
+        const configToSave = overrideConfig || {
+            clientName, projectName, projectDesc, projectDate,
+            mpTitle, mpSubTitle, heroVideoUrl, heroVideoIsIntegrated,
+            heroVideoScale, heroVideoBorderRadius,
+            tableFontSize,
+            sections, // Standard sections array
+            // metadata fallback
+            heroVideoUrl: heroVideoUrl
+        };
+
+        const updatedDate = new Date().toISOString();
+        const currentVideoUrl = overrideConfig ? overrideConfig.heroVideoUrl : heroVideoUrl;
+
+        try {
+            console.log("[MasterPlan] Saving to cloud...", configToSave);
+            // Try to update with all columns
+            const { error: updateError } = await supabase
+                .from('quotations')
+                .update({
+                    sections_config: configToSave,
+                    video_url: currentVideoUrl,
+                    updated_at: updatedDate,
+                    project: projectName,
+                    client: clientName
+                })
+                .eq('slug', CLOUD_SLUG);
+
+            if (updateError) {
+                console.warn("[MasterPlan] Primary update failed (could be missing column or slug):", updateError);
+
+                // If the error is about missing column (42703), try saving WITHOUT video_url column
+                if (updateError.code === '42703') {
+                    console.log("[MasterPlan] missing video_url column, falling back to config only...");
+                    const { error: fallbackError } = await supabase
+                        .from('quotations')
+                        .update({
+                            sections_config: configToSave,
+                            updated_at: updatedDate,
+                            project: projectName,
+                            client: clientName
+                        })
+                        .eq('slug', CLOUD_SLUG);
+
+                    if (fallbackError) throw fallbackError;
+                } else {
+                    // Try to upsert/insert if slug not found
+                    const { error: insertError } = await supabase
+                        .from('quotations')
+                        .upsert({
+                            slug: CLOUD_SLUG,
+                            theme_key: `mp_${uid()}`,
+                            sections_config: configToSave,
+                            video_url: currentVideoUrl, // This might fail too if column empty
+                            updated_at: updatedDate,
+                            project: projectName,
+                            client: clientName,
+                            title: mpTitle,
+                            is_home: false
+                        }, { onConflict: 'slug' });
+
+                    if (insertError) {
+                        console.warn("[MasterPlan] Upsert with video_url failed, retrying without it...");
+                        const { error: insertFallbackError } = await supabase
+                            .from('quotations')
+                            .upsert({
+                                slug: CLOUD_SLUG,
+                                theme_key: `mp_${uid()}`,
+                                sections_config: configToSave,
+                                updated_at: updatedDate,
+                                project: projectName,
+                                client: clientName,
+                                title: mpTitle,
+                                is_home: false
+                            }, { onConflict: 'slug' });
+
+                        if (insertFallbackError) throw insertFallbackError;
+                    }
+                }
+            }
+
+            setLastCloudSync(new Date());
+            if (!overrideConfig) {
+                toast({ title: "Sincronizado con la Nube", description: "Los cambios se han guardado permanentemente." });
+            }
+        } catch (error) {
+            console.error("Error saving to cloud:", error);
+            toast({ title: "Error de Sincronización", description: "No se pudo guardar en la nube.", variant: "destructive" });
+        } finally {
+            setIsCloudSyncing(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchCloudData();
+    }, []);
+
+    const toggleSection = (id) => {
+        setSections(prev => prev.map(s => s.id === id ? { ...s, collapsed: !s.collapsed } : s));
+    };
+
+    const updateSectionTitle = (id, val) => {
+        setSections(prev => prev.map(s => s.id === id ? { ...s, titulo: val.toUpperCase() } : s));
+    };
+    const updateSection = (id, patch) => {
+        setSections(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
+    };
+
+    const handleTableScroll = (id, e) => {
+        if (headerRefs.current[id]) {
+            headerRefs.current[id].scrollLeft = e.target.scrollLeft;
+        }
+    };
+
+    const startResize = (colKey, e) => {
+        if (colsLocked) return;
+        e.preventDefault();
+        const startX = e.pageX;
+        const startWidth = colWidths[colKey];
+
+        const onMouseMove = (moveEvent) => {
+            const delta = moveEvent.pageX - startX;
+            setColWidths(prev => ({ ...prev, [colKey]: Math.max(40, startWidth + delta) }));
+        };
+
+        const onMouseUp = () => {
+            document.removeEventListener("mousemove", onMouseMove);
+            document.removeEventListener("mouseup", onMouseUp);
+            document.body.style.cursor = "default";
+        };
+
+        document.addEventListener("mousemove", onMouseMove);
+        document.addEventListener("mouseup", onMouseUp);
+        document.body.style.cursor = "col-resize";
+    };
+
+    const toggleColsLocked = () => {
+        setColsLocked(!colsLocked);
+        toast({ title: !colsLocked ? "Celdas Bloqueadas" : "Edición de Celdas Activa" });
+    };
+
+    const toggleAdmin = () => {
+        if (isAdmin) setIsAdmin(false);
+        else {
+            const pwd = prompt("Ingrese clave de administrador:");
+            if (pwd === "2020") setIsAdmin(true);
+            else alert("Clave incorrecta");
+        }
+    };
+
+    const handleHeroVideoUpload = async (file) => {
+        if (!file) return;
+        setUploadingId('hero-video');
+        try {
+            const bucket = await getActiveBucket();
+            const fileName = `hero_video_${Date.now()}.${file.name.split('.').pop()}`;
+            const filePath = `masterplan/${fileName}`;
+            const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file);
+            if (uploadError) throw uploadError;
+            const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filePath);
+            setHeroVideoUrl(publicUrl);
+
+            // Pass the literal updated config to avoid stale state in saveToCloud
+            const updatedConfig = {
+                clientName, projectName, projectDesc, projectDate,
+                mpTitle, mpSubTitle, heroVideoUrl: publicUrl, heroVideoIsIntegrated,
+                heroVideoScale, heroVideoBorderRadius,
+                sections
+            };
+            await saveToCloud(updatedConfig);
+
+            toast({ title: "Video actualizado", description: "El video se ha subido y guardado correctamente." });
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error", description: "No se pudo subir el video.", variant: "destructive" });
+        } finally { setUploadingId(null); }
+    };
+
+    const handleItemMediaUpload = async (sectionId, itemId, file) => {
+        if (!file) return;
+        setUploadingId(itemId);
+        try {
+            const bucket = await getActiveBucket();
+            const fileExt = file.name.split('.').pop();
+            const fileName = `item_${sectionId}_${itemId}_${Date.now()}.${fileExt}`;
+            const filePath = `masterplan/${fileName}`;
+            const mediaType = file.type.startsWith('video/') ? 'video' : 'image';
+
+            const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file);
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filePath);
+
+            setSections(prev => prev.map(s => s.id === sectionId ? {
+                ...s,
+                items: s.items.map(it => it.id === itemId ? { ...it, media_url: publicUrl, media_type: mediaType } : it)
+            } : s));
+
+            toast({ title: "Media actualizado", description: "El archivo se ha subido correctamente." });
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error", description: "No se pudo subir el archivo.", variant: "destructive" });
+        } finally { setUploadingId(null); }
+    };
+
+    const handleModuleMediaUpload = async (sectionId, file) => {
+        if (!file) return;
+        setUploadingId(`module_${sectionId}`);
+        try {
+            const bucket = await getActiveBucket();
+            const fileName = `module_${sectionId}_${Date.now()}.${file.name.split('.').pop()}`;
+            const filePath = `masterplan/${fileName}`;
+            const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file);
+            if (uploadError) throw uploadError;
+            const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filePath);
+            updateSection(sectionId, { moduleImage: publicUrl });
+            toast({ title: "Imagen de módulo actualizada" });
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error", description: "No se pudo subir la imagen.", variant: "destructive" });
+        } finally { setUploadingId(null); }
+    };
+
+    const calcItem = (it) => {
+        const costoUnit = n(it.costoUSD);
+        const qty = n(it.qty);
+        const util = n(it.utilidad);
+        const ventaUnitFinal = costoUnit * (1 + (util / 100));
+        return { costoUnit, ventaUnitFinal, totalCosto: costoUnit * qty, totalVenta: ventaUnitFinal * qty };
+    };
 
     const updateItem = (sectionId, itemId, patch) => {
-        setSections((prev) =>
-            prev.map((s) => {
-                if (s.id !== sectionId) return s;
-                return {
-                    ...s,
-                    items: s.items.map((it) => (it.id === itemId ? { ...it, ...patch } : it)),
-                };
-            })
-        );
+        setSections(prev => prev.map(s => s.id === sectionId ? { ...s, items: s.items.map(it => it.id === itemId ? { ...it, ...patch } : it) } : s));
     };
 
     const addItem = (sectionId) => {
-        const it = {
-            id: uid(),
-            activo: true,
-            codigo: "",
-            equipo: "Nuevo equipo",
-            descripcion: "",
-            fuente: "Pendiente",
-            utilidad: 10,
-            qty: 1,
-            costoUSD: 0,
-            ventaUSD: 0,
-        };
-        setSections((prev) =>
-            prev.map((s) => (s.id === sectionId ? { ...s, items: [...s.items, it] } : s))
-        );
+        const it = { id: uid(), activo: true, codigo: "", equipo: "Nuevo equipo", descripcion: "", fuente: "Pendiente", utilidad: 10, qty: 1, costoUSD: 0, ventaUSD: 0 };
+        setSections(prev => prev.map(s => s.id === sectionId ? { ...s, items: [...s.items, it] } : s));
     };
 
     const removeItem = (sectionId, itemId) => {
-        setSections((prev) =>
-            prev.map((s) => (s.id === sectionId ? { ...s, items: s.items.filter((x) => x.id !== itemId) } : s))
-        );
+        setSections(prev => prev.map(s => s.id === sectionId ? { ...s, items: s.items.filter(x => x.id !== itemId) } : s));
     };
 
-    const sectionTotals = useMemo(() => {
-        return sections.map((s) => {
-            let c = 0;
-            let v = 0;
-            s.items.forEach((it) => {
-                if (!it.activo) return;
-                const r = calcItem(it);
-                c += r.totalCosto;
-                v += r.totalVenta;
-            });
-            return { sectionId: s.id, totalCosto: c, totalVenta: v };
-        });
-    }, [sections, autoMargen, margenPct]);
+    const addSection = () => {
+        setSections(prev => [...prev, { id: uid(), collapsed: false, summaryDesc: "", titulo: `${prev.length + 1}. NUEVA SECCIÓN`, tag: "NEW", items: [] }]);
+    };
+
+    const removeSection = (sectionId) => {
+        if (confirm("¿Eliminar este MÓDULO completo?")) setSections(prev => prev.filter(s => s.id !== sectionId));
+    };
+
+    const sectionTotals = useMemo(() => sections.map(s => {
+        let c = 0, v = 0;
+        s.items.forEach(it => { if (it.activo) { const r = calcItem(it); c += r.totalCosto; v += r.totalVenta; } });
+        return { sectionId: s.id, totalCosto: c, totalVenta: v };
+    }), [sections]);
 
     const grandTotals = useMemo(() => {
         const totalCosto = sectionTotals.reduce((acc, x) => acc + x.totalCosto, 0);
         const totalVenta = sectionTotals.reduce((acc, x) => acc + x.totalVenta, 0);
-
         const mxnSinIvaCosto = totalCosto * n(tipoCambio);
-        const ivaCosto = mxnSinIvaCosto * (n(ivaPct) / 100);
-        const mxnConIvaCosto = mxnSinIvaCosto + ivaCosto;
-
         const mxnSinIvaVenta = totalVenta * n(tipoCambio);
-        const ivaVenta = mxnSinIvaVenta * (n(ivaPct) / 100);
-        const mxnConIvaVenta = mxnSinIvaVenta + ivaVenta;
-
         return {
-            totalCosto,
-            totalVenta,
-            mxnSinIvaCosto,
-            ivaCosto,
-            mxnConIvaCosto,
-            mxnSinIvaVenta,
-            ivaVenta,
-            mxnConIvaVenta,
+            totalCosto, totalVenta,
+            mxnSinIvaCosto, ivaCosto: mxnSinIvaCosto * (n(ivaPct) / 100), mxnConIvaCosto: mxnSinIvaCosto * (1 + n(ivaPct) / 100),
+            mxnSinIvaVenta, ivaVenta: mxnSinIvaVenta * (n(ivaPct) / 100), mxnConIvaVenta: mxnSinIvaVenta * (1 + n(ivaPct) / 100)
         };
     }, [sectionTotals, tipoCambio, ivaPct]);
 
-    // Producción (cálculos)
-    const piezasLisasDia = useMemo(() => (n(kgLisas) * 1000) / Math.max(1, n(gLisas)), [kgLisas, gLisas]);
-    const piezasLisasHora = useMemo(() => piezasLisasDia / Math.max(1, n(horasDia)), [piezasLisasDia, horasDia]);
-
-    const piezasHexDia = useMemo(() => (n(kgHex) * 1000) / Math.max(1, n(gHex)), [kgHex, gHex]);
-    const piezasHexHora = useMemo(() => piezasHexDia / Math.max(1, n(horasDia)), [piezasHexDia, horasDia]);
-
-    const bolsasPolvoDia = useMemo(() => (n(kgPolvo) * 1000) / Math.max(1, n(gBolsaPolvo)), [kgPolvo, gBolsaPolvo]);
-    const bolsasPolvoHora = useMemo(() => bolsasPolvoDia / Math.max(1, n(horasDia)), [bolsasPolvoDia, horasDia]);
-
-    const fileInputRef = useRef(null);
-
-    const exportTemplate = () => {
-        const rows = [];
-        sections.forEach(s => {
-            let prodName = s.titulo;
-            // Extract clean product name from title (e.g. "1. Línea..." -> "Línea...")
-            if (/^\d+\.\s*/.test(prodName)) {
-                prodName = prodName.replace(/^\d+\.\s*/, "").split('·')[0].trim();
-            }
-
-            s.items.forEach(it => {
-                const r = calcItem(it);
-                rows.push({
-                    "NUM.": it.codigo,
-                    "PRODUCTO": prodName,
-                    "QTY": it.qty,
-                    "NOMBRE (ES)": it.equipo,
-                    // Export raw numbers, avoiding very small decimals if they are practically zero
-                    "COSTO (USD)": it.costoUSD > 0.01 ? it.costoUSD : 0,
-                    // Export Utility as Value (e.g. 60 instead of 0.6) for better UX
-                    "UTILIDAD": it.utilidad !== undefined ? it.utilidad : 10,
-                    "UNITARIO": r.ventaUnitFinal > 0.01 ? r.ventaUnitFinal : 0,
-                    "PRECIO (USD)": r.totalVenta > 0.01 ? r.totalVenta : 0
-                });
-            });
-        });
-
-        const worksheet = XLSX.utils.json_to_sheet(rows);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Plantilla CDA");
-        XLSX.writeFile(workbook, "PLANTILLA_IMPORTACION_CDA.xlsx");
-    };
-
-    const exportExcel = () => {
-        const rows = [];
-        sections.forEach(s => {
-            s.items.forEach(it => {
-                const r = calcItem(it);
-                rows.push({
-                    "SectionID": s.id,
-                    "Sección": s.titulo,
-                    "ID": it.id,
-                    "Código": it.codigo,
-                    "Equipo": it.equipo,
-                    "Descripción": it.descripcion,
-                    "Fuente/Utilidad": it.utilidad !== undefined ? it.utilidad : 10,
-                    "QTY": it.qty,
-                    "Costo Unitario (USD)": it.costoUSD,
-                    "Venta Unitario (Calculado)": r.ventaUnitFinal,
-                    "Total Venta (Calculado)": r.totalVenta
-                });
-            });
-        });
-
-        const worksheet = XLSX.utils.json_to_sheet(rows);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Master Plan");
-        XLSX.writeFile(workbook, "SOLIFOOD_MASTER_PLAN.xlsx");
-    };
+    const reset = () => { if (confirm("¿Restablecer MASTER PLAN?")) { localStorage.removeItem(STORAGE_KEY); setSections(initialSections); } };
 
     const handleImportExcel = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
+        const file = e.target.files[0]; if (!file) return;
         const reader = new FileReader();
         reader.onload = (evt) => {
             try {
                 const bstr = evt.target.result;
                 const wb = XLSX.read(bstr, { type: 'binary' });
-                const wsname = wb.SheetNames[0];
-                const ws = wb.Sheets[wsname];
+                const ws = wb.Sheets[wb.SheetNames[0]];
                 const data = XLSX.utils.sheet_to_json(ws);
-
-                if (!data || data.length === 0) {
-                    alert("El archivo parece estar vacío o no tiene el formato correcto.");
-                    return;
-                }
-
-                // DETECT MODE: Creation Mode if "PRODUCTO" column exists
-                const isCreationMode = data.some(row => row["PRODUCTO"] !== undefined);
-
-                if (isCreationMode) {
-                    if (!confirm("⚠️ MODO CREACIÓN DETECTADO\n\nEste archivo REEMPLAZARÁ TODO el Master Plan con la estructura de secciones del Excel.\n\n¿Estás seguro de continuar?")) {
-                        // Reset input if cancelled
-                        e.target.value = null;
-                        return;
-                    }
-
-                    // Group by PRODUCTO
-                    const groups = {};
-                    data.forEach(row => {
-                        const prod = row["PRODUCTO"] || "SIN CATEGORIA";
-                        if (!groups[prod]) groups[prod] = [];
-                        groups[prod].push(row);
-                    });
-
-                    const newSections = Object.keys(groups).map((prodName, idx) => {
-                        // Generate a clean ID for section
-                        const secId = `sec_${prodName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${uid()}`;
-
-                        return {
-                            id: secId,
-                            collapsed: false,
-                            summaryDesc: "",
-                            titulo: `${idx + 1}. ${prodName}`,
-                            tag: prodName.substring(0, 3).toUpperCase(),
-                            items: groups[prodName].map(row => {
-                                // Logic to respect Excel prices ("UNITARIO") over "UTILIDAD" column
-                                const costVal = row["COSTO (USD)"] ? n(row["COSTO (USD)"]) : 0;
-                                const saleVal = row["UNITARIO"] ? n(row["UNITARIO"]) : 0;
-
-                                // Calculate utility needed to hit the target sale price
-                                // Formula: Markup calculation
-                                // Price = Cost * (1 + Markup%)
-                                // Markup% = (Price / Cost) - 1
-                                let calculatedUtil = 10; // Default 10%
-                                if (saleVal > 0 && costVal > 0 && saleVal > costVal) {
-                                    calculatedUtil = ((saleVal / costVal) - 1) * 100;
-                                } else if (row["UTILIDAD"] !== undefined && n(row["UTILIDAD"]) !== 0) { // Check for existence and non-zero value
-                                    // Fallback to Excel column if price logic fails (e.g. 0.6 -> 60%)
-                                    // But be careful if 0.6 means 60% or something else. Assuming 0.6 = 60%.
-                                    calculatedUtil = n(row["UTILIDAD"]) < 1 ? n(row["UTILIDAD"]) * 100 : n(row["UTILIDAD"]);
-                                } else {
-                                    // If no saleVal, costVal, or UTILIDAD, default to 10%
-                                    calculatedUtil = 10;
-                                }
-
-                                return {
-                                    id: uid(), // Always fresh ID
-                                    activo: true,
-                                    codigo: row["NUM."] ? String(row["NUM."]) : "",
-                                    equipo: row["NOMBRE (ES)"] || "Sin nombre",
-                                    descripcion: "",
-                                    fuente: "Pendiente",
-                                    utilidad: calculatedUtil,
-                                    qty: row["QTY"] ? n(row["QTY"]) : 1,
-                                    costoUSD: costVal,
-                                    ventaUSD: 0 // Not actually used by calcItem, but part of schema
-                                };
-                            })
-                        };
-                    });
-
-                    setSections(newSections);
-                    alert("Master Plan reconstruido exitosamente.");
-
-                } else {
-                    // Update Mode (old logic)
-                    setSections(prev => prev.map(s => {
-                        const sectionItems = data.filter(row => row.SectionID === s.id);
-                        if (sectionItems.length === 0) return s;
-
-                        const updatedItems = s.items.map(it => {
-                            const row = sectionItems.find(r => r.ID === it.id);
-                            if (!row) return it;
-
-                            // Actualizar campos permitidos
-                            return {
-                                ...it,
-                                equipo: row["Equipo"] || it.equipo,
-                                descripcion: row["Descripción"] || it.descripcion,
-                                utilidad: row["Fuente/Utilidad"] !== undefined ? n(row["Fuente/Utilidad"]) : it.utilidad,
-                                qty: row["QTY"] !== undefined ? n(row["QTY"]) : it.qty,
-                                costoUSD: row["Costo Unitario (USD)"] !== undefined ? n(row["Costo Unitario (USD)"]) : it.costoUSD
-                            };
-                        });
-
-                        return { ...s, items: updatedItems };
-                    }));
-                    alert("Master Plan actualizado (Modo Edición/IDs).");
-                }
-
-            } catch (error) {
-                console.error("Error importando Excel:", error);
-                alert("Error al procesar el archivo Excel.");
-            }
+                if (!data?.length) return;
+                const groups = {};
+                data.forEach(row => { const p = row["PRODUCTO"] || "SIN CATEGORIA"; if (!groups[p]) groups[p] = []; groups[p].push(row); });
+                setSections(Object.keys(groups).map((p, idx) => ({
+                    id: `sec_${uid()}`, collapsed: false, summaryDesc: "", titulo: `${idx + 1}. ${p}`, tag: p.substring(0, 3).toUpperCase(),
+                    items: groups[p].map(row => ({
+                        id: uid(), activo: true, codigo: row["NUM."] || "", equipo: row["NOMBRE (ES)"] || "Sin nombre", descripcion: "", fuente: "Pendiente",
+                        utilidad: row["UTILIDAD"] || 10, qty: row["QTY"] || 1, costoUSD: row["COSTO (USD)"] || 0, ventaUSD: 0
+                    }))
+                })));
+                alert("Importado con éxito");
+            } catch (err) { console.error(err); alert("Error al importar"); }
         };
         reader.readAsBinaryString(file);
-        // Reset input
         e.target.value = null;
-    };
-
-    const reset = () => {
-        if (!confirm("¿Restablecer MASTER PLAN a valores iniciales?")) return;
-        localStorage.removeItem(STORAGE_KEY);
-        setSections(initialSections);
-    };
-
-
-
-    const toggleSection = (sectionId) => {
-        setSections(prev => prev.map(s => s.id === sectionId ? { ...s, collapsed: !s.collapsed } : s));
-    };
-
-    const updateSectionDesc = (sectionId, newDesc) => {
-        setSections(prev => prev.map(s => s.id === sectionId ? { ...s, summaryDesc: newDesc } : s));
-    };
-
-    const toggleSectionJustify = (sectionId) => {
-        setSections(prev => prev.map(s => s.id === sectionId ? { ...s, justify: !s.justify } : s));
     };
 
     return (
@@ -634,523 +565,425 @@ export default function MasterPlan() {
             <div className="absolute inset-0 bg-black/90 backdrop-blur-[2px] z-0" />
 
             <div className="relative z-10 w-full max-w-[1920px] mx-auto">
-                <div className="flex items-center gap-4 mb-6">
-                    <div>
-                        <button onClick={() => navigate('/')} className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors mr-4 group" title="Regresar al inicio">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:-translate-x-1 transition-transform"><path d="M19 12H5" /><path d="M12 19l-7-7 7-7" /></svg>
+                {/* Header Container */}
+                <div className="flex flex-col md:flex-row items-center justify-between gap-8 mb-12 bg-zinc-950/40 p-8 rounded-[2.5rem] border border-white/5 backdrop-blur-xl relative z-[100] overflow-visible group/header">
+                    {/* Left side */}
+                    <div className="flex items-center gap-6 flex-1 justify-start">
+                        <button onClick={() => navigate('/')} className="p-3 rounded-full bg-white/5 hover:bg-primary hover:text-black text-gray-400 transition-all group/back">
+                            <X size={24} className="group-hover:rotate-90 transition-transform" />
                         </button>
-                    </div>
-                    <div className="w-3 h-3 rounded-full bg-primary shadow-[0_0_10px_rgba(255,214,10,0.5)]" />
-                    <div>
-                        <div className="font-extrabold text-2xl tracking-tight text-white uppercase flex items-center gap-4">
-                            SOLIFOOD <span className="text-primary">MASTER PLAN</span>
-                            <div className="flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-black border border-white/10 shadow-[0_0_20px_rgba(0,0,0,1)]">
-                                <div className="w-2 h-2 rounded-full bg-[#22c55e] shadow-[0_0_8px_#22c55e] animate-pulse" />
-                                <span className="text-[10px] font-mono font-bold text-gray-300 tracking-[0.2em]">Ver 2.22</span>
+                        <div className="flex flex-col gap-2">
+                            <img src="/solifood-logo.png" alt="Logo" className="h-16 object-contain" />
+                            <div className="flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-black/50 border border-white/10 w-fit">
+                                <div className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse" />
+                                <span className="text-[9px] font-mono font-bold text-gray-400 tracking-[0.2em]">Ver 3.0</span>
                             </div>
                         </div>
-                        <div className="text-gray-400 text-sm mt-1">
-                            Proyecto desde grano + 2 líneas de tabletas + polvo bebida + empaque.
-                        </div>
                     </div>
 
-                    <div className="ml-auto flex gap-3 items-center">
-                        <button
-                            onClick={toggleAdmin}
-                            className={`px-4 py-2 rounded-full border transition-colors text-sm font-bold flex items-center gap-2 ${isAdmin ? 'border-red-500/50 bg-red-500/10 text-red-500 hover:bg-red-500/20' : 'border-white/10 bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'}`}
-                            title={isAdmin ? "Cerrar modo editor" : "Activar modo editor para modificar montos"}
-                        >
-                            {isAdmin ? "EDITOR (ACTIVO)" : "EDITOR"}
-                        </button>
+                    {/* Center side */}
+                    <div className="flex flex-col items-center text-center flex-[2]">
+                        <div className="mb-2 w-full flex flex-col items-center relative">
+                            {isAdmin ? (
+                                <input value={mpSubTitle} onChange={(e) => setMpSubTitle(e.target.value.toUpperCase())} className="bg-transparent border-b border-primary/30 text-xs font-black text-primary uppercase tracking-[0.4em] text-center w-full max-w-sm mb-1" />
+                            ) : (
+                                <span className="text-xs font-black text-primary uppercase tracking-[0.4em] opacity-80">{mpSubTitle}</span>
+                            )}
+                            {isAdmin ? (
+                                <input value={mpTitle} onChange={(e) => setMpTitle(e.target.value.toUpperCase())} className="bg-transparent border-b border-white/20 text-4xl md:text-6xl font-black text-primary tracking-tighter uppercase leading-none mt-1 text-center w-full max-w-xl" />
+                            ) : (
+                                <h1 className="text-4xl md:text-6xl font-black text-primary tracking-tighter uppercase leading-none mt-1">{mpTitle}</h1>
+                            )}
+                        </div>
+                        <div className="flex flex-wrap justify-center gap-6 mt-4 text-[10px] font-bold border-t border-white/5 pt-4 w-full opacity-60 tracking-widest uppercase">
+                            <div className="flex items-center gap-2">PROJECT: <span className="text-white">{projectName}</span></div>
+                            <div className="flex items-center gap-2">CLIENT: <span className="text-white">{clientName}</span></div>
+                            <div className="flex items-center gap-2">DATE: <span className="text-white">{projectDate}</span></div>
+                        </div>
+                        <p className="text-gray-400 text-[11px] font-bold mt-4 uppercase tracking-widest opacity-80 max-w-xl leading-relaxed">{projectDesc}</p>
+                    </div>
 
-                        {/* Parámetros Iniciales en Header */}
+                    {/* Right side */}
+                    <div className="flex flex-wrap items-center justify-end gap-3 flex-1">
+                        <button onClick={toggleAdmin} className={`px-4 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all relative z-[110] active:scale-95 ${isAdmin ? 'border-red-500/50 bg-red-500/10 text-red-500' : 'border-white/10 bg-white/5 text-gray-400 hover:border-primary/50'}`}>
+                            {isAdmin ? "Admin Activo" : "Editor"}
+                        </button>
+                        {isAdmin && (
+                            <button
+                                onClick={toggleColsLocked}
+                                className={`px-4 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2 ${colsLocked ? 'border-amber-500/50 bg-amber-500/10 text-amber-500' : 'border-blue-500/50 bg-blue-500/10 text-blue-500'}`}
+                                title={colsLocked ? "Desbloquear celdas" : "Bloquear celdas"}
+                            >
+                                {colsLocked ? <Lock size={12} /> : <Unlock size={12} />}
+                                {colsLocked ? "Bloqueado" : "Ajuste Libre"}
+                            </button>
+                        )}
+                        {isAdmin && (
+                            <button
+                                onClick={saveToCloud}
+                                disabled={isCloudSyncing}
+                                className={`px-4 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2 ${isCloudSyncing ? 'bg-zinc-800 text-zinc-500 border-zinc-700' : 'border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'}`}
+                            >
+                                {isCloudSyncing ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                                {isCloudSyncing ? "Guardando..." : "Guardar en Nube"}
+                            </button>
+                        )}
                         <Dialog open={isParamsModalOpen} onOpenChange={setIsParamsModalOpen}>
                             <DialogTrigger asChild>
-                                <button
-                                    className="px-4 py-2 rounded-full bg-white/5 border border-primary/30 text-primary font-bold hover:bg-primary/10 transition-all flex items-center gap-2 group text-sm"
-                                >
-                                    <Settings size={16} className="group-hover:rotate-90 transition-transform duration-500" />
-                                    PARÁMETROS INICIALES
-                                </button>
+                                <button className="px-4 py-2 rounded-xl bg-primary/10 border border-primary/30 text-primary font-black text-[10px] tracking-widest uppercase flex items-center gap-2"><Settings size={14} /> Ajustes Iniciales</button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-4xl max-h-[90vh] bg-zinc-950/90 backdrop-blur-2xl border border-white/20 text-white p-0 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5),inset_0_0_20px_rgba(255,255,255,0.05)] ring-1 ring-white/10">
-                                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none"></div>
-
-                                <div className="overflow-y-auto max-h-[90vh] p-8 custom-scrollbar">
-                                    <DialogHeader className="mb-8 relative z-10">
-                                        <DialogTitle className="text-3xl font-black text-primary tracking-tighter uppercase flex items-center gap-3">
-                                            <Settings size={28} />
-                                            Configuración del Sistema
-                                        </DialogTitle>
-                                        <p className="text-gray-500 font-medium tracking-wide">Ajusta los parámetros globales de producción y finanzas.</p>
-                                    </DialogHeader>
-
-                                    <div className="space-y-10 relative z-10">
-                                        {/* Producción */}
-                                        <div className="space-y-6">
-                                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
-                                                <div className="w-8 h-[1px] bg-gray-800"></div>
-                                                Parámetros de Producción
-                                            </h4>
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                                                <Field label="Horas/día" value={horasDia} onChange={setHorasDia} />
-                                                <div className="col-span-1" />
-                                                <div className="col-span-1" />
-                                                <div className="col-span-1" />
-
-                                                <Field label="Kg/día lisas" value={kgLisas} onChange={setKgLisas} />
-                                                <Field label="g por tableta lisa" value={gLisas} onChange={setGLisas} />
-                                                <Field label="Kg/día hex" value={kgHex} onChange={setKgHex} />
-                                                <Field label="g por tableta hex" value={gHex} onChange={setGHex} />
-                                                <Field label="Kg/día polvo" value={kgPolvo} onChange={setKgPolvo} />
-                                                <Field label="g por bolsa polvo" value={gBolsaPolvo} onChange={setGBolsaPolvo} />
-                                            </div>
-
-                                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 pt-4">
-                                                <KPI label="Lisas (pzas/día)" value={fmt0(piezasLisasDia)} />
-                                                <KPI label="Lisas (pzas/h)" value={fmt0(piezasLisasHora)} />
-                                                <KPI label="Hex (pzas/día)" value={fmt0(piezasHexDia)} />
-                                                <KPI label="Hex (pzas/h)" value={fmt0(piezasHexHora)} />
-                                                <KPI label="Polvo (bolsas/día)" value={fmt0(bolsasPolvoDia)} />
-                                                <KPI label="Polvo (bolsas/h)" value={fmt1(bolsasPolvoHora)} />
-                                            </div>
-                                        </div>
-
-                                        {/* Finanzas */}
-                                        <div className="space-y-6">
-                                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
-                                                <div className="w-8 h-[1px] bg-gray-800"></div>
-                                                Parámetros Financieros
-                                            </h4>
-                                            <div className="flex gap-6 flex-wrap items-end bg-white/5 p-6 rounded-2xl border border-white/5">
-                                                <FieldDark label="Tipo de cambio (MXN/USD)" value={tipoCambio} onChange={setTipoCambio} />
-                                                <FieldDark label="IVA (%)" value={ivaPct} onChange={setIvaPct} />
-
-                                                <div className="flex gap-2 items-end">
-                                                    <FieldDark label="Utilidad Global (%)" value={globalUtilidad} onChange={setGlobalUtilidad} compact />
-                                                    <button
-                                                        onClick={() => {
-                                                            applyGlobalUtility();
-                                                            toast({ title: "Utilidad aplicada", description: "Se ha actualizado la utilidad en todos los ítems activos." });
-                                                        }}
-                                                        className="mb-[2px] px-6 py-2.5 bg-white/10 text-white font-bold rounded-lg hover:bg-white/20 transition-all text-sm border border-white/10"
-                                                    >
-                                                        Actualizar todo
-                                                    </button>
+                            <DialogContent className="max-w-4xl max-h-[90vh] bg-black border border-white/20 text-white rounded-3xl overflow-hidden p-8">
+                                <DialogHeader className="mb-8">
+                                    <DialogTitle className="text-3xl font-black text-primary uppercase tracking-tighter">Configuración</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-10 overflow-y-auto max-h-[60vh] pr-4 custom-scrollbar">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                        <Field label="Horas/día" value={horasDia} onChange={setHorasDia} />
+                                        <Field label="Tipo Cambio" value={tipoCambio} onChange={setTipoCambio} />
+                                        <Field label="IVA %" value={ivaPct} onChange={setIvaPct} />
+                                    </div>
+                                    <div className="space-y-6">
+                                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Estética de Tabla</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white/5 p-6 rounded-2xl border border-white/10">
+                                            <div className="space-y-4">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Tamaño de Fuente: {tableFontSize}px</span>
                                                 </div>
+                                                <Slider value={[tableFontSize]} onValueChange={([v]) => setTableFontSize(v)} min={8} max={24} step={1} />
                                             </div>
                                         </div>
                                     </div>
-
-                                    <div className="mt-10 pt-6 border-t border-white/5 flex justify-end">
-                                        <button
-                                            onClick={() => {
-                                                setIsParamsModalOpen(false);
-                                                toast({
-                                                    title: "Cambios guardados",
-                                                    description: "Los parámetros de producción y finanzas se han actualizado correctamente.",
-                                                    variant: "default",
-                                                });
-                                            }}
-                                            className="px-10 py-4 bg-primary text-black font-black rounded-xl hover:scale-105 transition-all shadow-[0_10px_30px_rgba(255,214,10,0.3)] uppercase tracking-widest text-sm flex items-center gap-2"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
-                                            GUARDAR CAMBIOS
-                                        </button>
+                                    <div className="space-y-6">
+                                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Hero Video Config</h4>
+                                        <div className="flex items-center gap-4 bg-white/5 p-4 rounded-xl border border-white/10">
+                                            <span className="text-xs font-bold text-gray-400 uppercase">Input Video:</span>
+                                            <input type="file" ref={heroVideoInputRef} className="hidden" onChange={(e) => handleHeroVideoUpload(e.target.files[0])} />
+                                            <button onClick={() => heroVideoInputRef.current.click()} className="px-3 py-1 bg-blue-500 text-white rounded text-[10px] font-bold uppercase tracking-widest">Subir</button>
+                                        </div>
                                     </div>
                                 </div>
+                                <div className="mt-8 flex justify-end"><button onClick={() => setIsParamsModalOpen(false)} className="px-10 py-4 bg-primary text-black font-black rounded-xl uppercase tracking-widest text-xs">Guardar Cambios</button></div>
                             </DialogContent>
                         </Dialog>
-
-                        {isAdmin && (
-                            <>
-                                <input
-                                    type="file"
-                                    accept=".xlsx, .xls"
-                                    onChange={handleImportExcel}
-                                    ref={fileInputRef}
-                                    className="hidden"
-                                />
-                                <button
-                                    onClick={() => fileInputRef.current.click()}
-                                    className="px-4 py-2 rounded-full border border-primary/30 bg-primary/10 text-primary font-bold hover:bg-primary/20 transition-colors text-sm"
-                                >
-                                    Importar Excel
-                                </button>
-                                <button
-                                    onClick={exportTemplate}
-                                    className="px-4 py-2 rounded-full border border-gray-500/30 bg-gray-800/50 text-gray-300 font-bold hover:bg-gray-700/50 transition-colors text-sm"
-                                    title="Descargar formato para llenar precios"
-                                >
-                                    Descargar Formato
-                                </button>
-                                <button
-                                    onClick={exportExcel}
-                                    className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-white font-bold hover:bg-white/10 transition-colors text-sm"
-                                >
-                                    Exportar Todo
-                                </button>
-                            </>
-                        )}
-
-                        <button
-                            onClick={() => window.print()}
-                            className="px-4 py-2 rounded-full bg-primary text-black font-extrabold hover:bg-yellow-400 transition-colors shadow-lg shadow-yellow-900/20 text-sm"
-                        >
-                            Exportar a PDF
-                        </button>
-
-                        {isAdmin && (
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={reset}
-                                    className="px-4 py-2 rounded-full border border-red-900/30 bg-red-950/20 text-red-500 font-bold hover:bg-red-900/30 transition-colors text-sm"
-                                >
-                                    Reset
-                                </button>
-                                <button
-                                    onClick={() => setColsLocked(!colsLocked)}
-                                    className={`px-4 py-2 rounded-full border transition-colors text-sm font-bold flex items-center gap-2 ${colsLocked ? 'border-amber-500/50 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20' : 'border-blue-500/50 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20'}`}
-                                    title={colsLocked ? "Desbloquear redimensionado" : "Bloquear redimensionado de celdas"}
-                                >
-                                    {colsLocked ? <Lock size={14} /> : <Unlock size={14} />}
-                                    {colsLocked ? "CELDAS BLOQUEADAS" : "BLOQUEAR CELDAS"}
-                                </button>
-                                <button
-                                    onClick={resetView}
-                                    className="px-4 py-2 rounded-full border border-blue-900/30 bg-blue-950/20 text-blue-400 font-bold hover:bg-blue-900/30 transition-colors text-sm"
-                                    title="Restablecer ancho de columnas"
-                                >
-                                    Restablecer Vista
-                                </button>
-                            </div>
-                        )}
-
-                        <button
-                            onClick={() => navigate('/')}
-                            className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
-                            title="Cerrar Master Plan"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                        </button>
                     </div>
                 </div>
 
+                {/* Sub-Header Actions */}
+                <div className="flex items-center justify-between mb-8">
+                    <div className="flex gap-2">
+                        <button onClick={() => window.print()} className="px-6 py-2 bg-primary text-black font-black rounded-xl text-[10px] tracking-widest uppercase">Exportar PDF</button>
+                        {isAdmin && <button onClick={addSection} className="px-6 py-2 bg-white/5 border border-white/10 text-white font-black rounded-xl text-[10px] tracking-widest uppercase hover:bg-white/10">+ Añadir Módulo</button>}
+                    </div>
+                    {isAdmin && (
+                        <div className="flex gap-2">
+                            <button onClick={() => fileInputRef.current.click()} className="p-2 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-primary"><Upload size={18} /></button>
+                            <input type="file" ref={fileInputRef} className="hidden" onChange={handleImportExcel} />
+                            <button onClick={reset} className="p-2 bg-white/5 border border-white/10 rounded-lg text-red-500 hover:bg-red-500/10"><Loader2 size={18} /></button>
+                        </div>
+                    )}
+                </div>
 
-                {/* Secciones */}
-                <div className="space-y-8">
-                    {sections.map((s) => {
-                        const totals = sectionTotals.find((x) => x.sectionId === s.id);
+                {/* Sections Render */}
+                <div className="space-y-12">
+                    {sections.map(s => {
+                        const visibleCols = isAdmin
+                            ? ['item', 'equipo', 'descripcion', 'media', 'qty', 'costo', 'util', 'unitario', 'total', 'action']
+                            : ['item', 'equipo', 'descripcion', 'media', 'qty', 'unitario', 'total'];
+                        const totalTableWidth = visibleCols.reduce((acc, col) => acc + (colWidths[col] || 0), 0);
 
                         return (
-                            <div key={s.id} className="animate-in fade-in duration-500">
-                                <div className="flex items-center gap-4 mb-4">
-                                    <button
-                                        onClick={() => toggleSection(s.id)}
-                                        className="p-1 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-                                    >
-                                        {s.collapsed ? (
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                                        ) : (
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                                        )}
-                                    </button>
-
-                                    <div className="text-xl font-extrabold text-white tracking-tight">
-                                        <span className="text-primary mr-2 opacity-80">{s.titulo.split('.')[0]}.</span>
-                                        {s.titulo.split('.').slice(1).join('.')}
+                            <div key={s.id} className={`bg-zinc-950/40 border border-white/5 rounded-[2rem] backdrop-blur-md group/section transition-all duration-500 hover:ring-1 hover:ring-primary/40 ${!s.collapsed ? 'led-border-glow ring-1 ring-primary/20 scale-[1.01]' : 'hover:led-border-glow'}`}>
+                                {/* Integrated Sticky Header Host */}
+                                <div
+                                    className="sticky top-0 z-50 bg-black/95 shadow-[0_8px_32px_rgba(0,0,0,0.8)] border-b border-white/10 rounded-t-[2rem]"
+                                >
+                                    {/* Row 1: Module Title & Actions */}
+                                    <div className="p-6 flex items-center justify-between bg-white/[0.02]">
+                                        <div className="flex items-center gap-4">
+                                            <button
+                                                onClick={() => toggleSection(s.id)}
+                                                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 ${s.collapsed ? 'bg-zinc-900 text-gray-500 shadow-inner hover:led-button-glow hover:text-primary' : 'bg-primary text-black shadow-[0_0_20px_rgba(var(--primary-rgb),0.3)] led-button-glow'}`}
+                                                title={s.collapsed ? "ABRIR MÓDULO" : "CERRAR MÓDULO"}
+                                            >
+                                                {s.collapsed ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
+                                            </button>
+                                            <div className="flex flex-col">
+                                                {isAdmin ? (
+                                                    <input
+                                                        value={s.titulo}
+                                                        onChange={(e) => updateSectionTitle(s.id, e.target.value)}
+                                                        className="bg-transparent border-b border-primary/20 text-xl font-black text-primary uppercase tracking-tight focus:outline-none focus:border-primary w-[500px]"
+                                                    />
+                                                ) : (
+                                                    <h3 className="text-xl font-black text-primary uppercase tracking-tight">
+                                                        {(() => {
+                                                            const parts = s.titulo.split(' ');
+                                                            return (
+                                                                <>
+                                                                    <span className="text-white">{parts[0]}</span>
+                                                                    {parts.length > 1 && ' ' + parts.slice(1).join(' ')}
+                                                                </>
+                                                            );
+                                                        })()}
+                                                    </h3>
+                                                )}
+                                                <div className="flex items-center gap-3 mt-1.5">
+                                                    <span className="text-[9px] font-black bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded uppercase tracking-widest leading-none h-4 flex items-center">{s.tag}</span>
+                                                    {s.collapsed && s.summaryDesc && (
+                                                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider max-w-md truncate opacity-70">
+                                                            {s.summaryDesc}
+                                                        </span>
+                                                    )}
+                                                    {s.collapsed && !s.summaryDesc && (
+                                                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest flex items-center gap-1 opacity-40">
+                                                            <ChevronsRight size={10} className="animate-pulse" /> Módulo contraído
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-6">
+                                            {s.collapsed && (
+                                                <div className="flex flex-col items-end mr-2">
+                                                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1 opacity-50">Subtotal Módulo</span>
+                                                    <span className="text-2xl font-black text-primary tracking-tighter drop-shadow-[0_0_10px_rgba(var(--primary-rgb),0.3)]">
+                                                        {money(sectionTotals.find(x => x.sectionId === s.id)?.totalVenta || 0)}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {isAdmin && (
+                                                <div className="flex gap-2 mr-4">
+                                                    <button
+                                                        onClick={() => {
+                                                            const inp = document.createElement('input');
+                                                            inp.type = 'file';
+                                                            inp.onchange = (e) => handleModuleMediaUpload(s.id, e.target.files[0]);
+                                                            inp.click();
+                                                        }}
+                                                        className="p-2 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-primary transition-colors"
+                                                        title="Sube imagen de portada del módulo"
+                                                    >
+                                                        {uploadingId === `module_${s.id}` ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}
+                                                    </button>
+                                                </div>
+                                            )}
+                                            {isAdmin && (
+                                                <button
+                                                    onClick={() => removeSection(s.id)}
+                                                    className="px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-red-500/20 transition-all"
+                                                >
+                                                    Eliminar Módulo
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div className="text-xs font-bold bg-primary/10 text-primary px-3 py-1 rounded-full border border-primary/20">
-                                        {s.tag}
-                                    </div>
 
+                                    {/* Module Info Panel (Only when expanded) */}
                                     {!s.collapsed && (
-                                        <button
-                                            onClick={() => addItem(s.id)}
-                                            className="ml-auto px-4 py-2 rounded-full border border-dashed border-white/20 bg-transparent text-gray-400 font-bold hover:bg-white/5 hover:text-white hover:border-white/40 transition-all text-sm flex items-center gap-2"
+                                        <div className="px-6 py-6 border-t border-white/5 bg-gradient-to-b from-white/[0.01] to-transparent flex gap-8">
+                                            {s.moduleImage && (
+                                                <div className="w-48 h-32 rounded-2xl overflow-hidden border border-white/10 shadow-2xl flex-shrink-0 group/modimg relative">
+                                                    <img src={s.moduleImage} className="w-full h-full object-cover grayscale group-hover/modimg:grayscale-0 transition-all duration-500" />
+                                                    {isAdmin && (
+                                                        <button
+                                                            onClick={() => updateSection(s.id, { moduleImage: null })}
+                                                            className="absolute top-2 right-2 p-1 bg-black/50 text-white rounded-full opacity-0 group-hover/modimg:opacity-100 transition-opacity"
+                                                        >
+                                                            <X size={12} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+                                            <div className="flex-1 space-y-4">
+                                                {isAdmin ? (
+                                                    <textarea
+                                                        value={s.summaryDesc || ""}
+                                                        onChange={(e) => updateSection(s.id, { summaryDesc: e.target.value })}
+                                                        placeholder="Descripción breve del módulo..."
+                                                        className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-xs text-gray-400 font-medium outline-none focus:border-primary/30 h-32 resize-none"
+                                                    />
+                                                ) : (
+                                                    s.summaryDesc && <p className="text-xs text-gray-400 font-medium leading-relaxed max-w-2xl">{s.summaryDesc}</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Row 2: Industrial Labels (Yellow) - Independent Scrollable Header */}
+                                    {!s.collapsed && (
+                                        <div
+                                            className="overflow-hidden bg-primary text-black"
+                                            ref={el => headerRefs.current[s.id] = el}
                                         >
-                                            <span className="text-lg leading-none">+</span> Agregar equipo
-                                        </button>
+                                            <div
+                                                className="flex text-[10px] font-black uppercase tracking-[0.2em] h-12"
+                                                style={{ width: totalTableWidth }}
+                                            >
+                                                <HeaderCell label="Item" width={colWidths.item} onResize={(e) => startResize('item', e)} locked={colsLocked} />
+                                                <HeaderCell label="Equipo" width={colWidths.equipo} onResize={(e) => startResize('equipo', e)} locked={colsLocked} />
+                                                <HeaderCell label="Descripción" width={colWidths.descripcion} onResize={(e) => startResize('descripcion', e)} locked={colsLocked} />
+                                                <HeaderCell label="FOTO / VIDEO" width={colWidths.media} onResize={(e) => startResize('media', e)} locked={colsLocked} align="center" />
+                                                <HeaderCell label="Qty" width={colWidths.qty} onResize={(e) => startResize('qty', e)} locked={colsLocked} />
+                                                {isAdmin && <HeaderCell label="Costo (USD)" width={colWidths.costo} onResize={(e) => startResize('costo', e)} locked={colsLocked} align="right" />}
+                                                {isAdmin && <HeaderCell label="Util %" width={colWidths.util} onResize={(e) => startResize('util', e)} locked={colsLocked} align="center" />}
+                                                <HeaderCell label="Unitario (USD)" width={colWidths.unitario} onResize={(e) => startResize('unitario', e)} locked={colsLocked} align="right" />
+                                                <HeaderCell label="Total (USD)" width={colWidths.total} onResize={(e) => startResize('total', e)} locked={colsLocked} align="right" />
+                                                {isAdmin && <HeaderCell label="Acc" width={colWidths.action} onResize={(e) => startResize('action', e)} locked={colsLocked} align="center" />}
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
 
-                                {s.collapsed ? (
-                                    <div className="group border border-white/10 rounded-xl bg-zinc-900/50 backdrop-blur-sm p-6 flex items-start gap-8 animate-in fade-in zoom-in-95 duration-200 transition-colors hover:border-primary/40">
-                                        <div className="flex-1">
-                                            <div className="flex justify-between items-center mb-2">
-                                                <div className="text-sm font-bold text-gray-500 uppercase tracking-wider group-hover:text-primary transition-colors">Descripción del Sistema</div>
-                                                {isAdmin && (
-                                                    <button
-                                                        onClick={() => toggleSectionJustify(s.id)}
-                                                        className={`p-1.5 rounded-md border transition-all ${s.justify ? 'bg-primary text-black border-primary' : 'bg-transparent text-gray-500 border-white/10 hover:border-white/30'}`}
-                                                        title={s.justify ? "Alineado a la izquierda" : "Justificar texto"}
-                                                    >
-                                                        {s.justify ? <AlignJustify size={14} /> : <AlignLeft size={14} />}
-                                                    </button>
-                                                )}
-                                            </div>
-                                            {isAdmin ? (
-                                                <textarea
-                                                    value={s.summaryDesc || ""}
-                                                    onChange={(e) => updateSectionDesc(s.id, e.target.value)}
-                                                    className={`w-full bg-black/20 border border-white/10 rounded-lg p-3 text-gray-300 focus:text-white focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all text-sm resize-none custom-scrollbar ${s.justify ? 'text-justify' : 'text-left'}`}
-                                                    placeholder="Escribe una breve descripción de esta sección..."
-                                                    rows={3}
-                                                />
-                                            ) : ( /* Read-only view */
-                                                <div className={`text-gray-400 text-sm leading-relaxed ${s.justify ? 'text-justify' : 'text-left'}`}>
-                                                    {s.summaryDesc || "Sin descripción."}
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="w-64 text-right">
-                                            <div className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Total Sistema</div>
-                                            <div className="text-3xl font-black text-primary tracking-tight">
-                                                {fmt(totals?.totalVenta || 0)}
-                                            </div>
-                                            <div className="text-xs text-gray-500 mt-1">USD</div>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="border border-white/10 rounded-xl overflow-hidden bg-zinc-900/30 backdrop-blur-sm shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]">
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-left border-collapse min-w-full table-fixed">
-                                                <thead>
-                                                    <tr className="sticky top-0 z-30 bg-primary/95 backdrop-blur-md text-black font-extrabold uppercase text-[10px] tracking-wider border-b border-primary/20 shadow-[inset_0_1px_rgba(255,255,255,0.4),0_4px_12px_rgba(0,0,0,0.1)]">
-                                                        <th style={{ width: colWidths.ok }} className="p-4 text-center text-black/80 relative group/th">
-                                                            OK
-                                                            {!colsLocked && <div onMouseDown={(e) => startResize('ok', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 z-10" />}
-                                                        </th>
-                                                        <th style={{ width: colWidths.equipo }} className="p-4 text-black text-center relative group/th">
-                                                            Equipo
-                                                            {!colsLocked && <div onMouseDown={(e) => startResize('equipo', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 z-10" />}
-                                                        </th>
-                                                        <th style={{ width: colWidths.descripcion }} className="p-4 text-black text-center relative group/th">
-                                                            Descripción
-                                                            {!colsLocked && <div onMouseDown={(e) => startResize('descripcion', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 z-10" />}
-                                                        </th>
-                                                        <th style={{ width: colWidths.multimedia }} className="p-4 text-black text-center relative group/th">
-                                                            Foto/Video
-                                                            {!colsLocked && <div onMouseDown={(e) => startResize('multimedia', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 z-10" />}
-                                                        </th>
-                                                        {isAdmin && (
-                                                            <th style={{ width: colWidths.utilidad }} className="p-4 text-black text-center relative group/th">
-                                                                % Utilidad
-                                                                {!colsLocked && <div onMouseDown={(e) => startResize('utilidad', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 z-10" />}
-                                                            </th>
-                                                        )}
-                                                        <th style={{ width: colWidths.qty }} className="p-4 text-black text-center relative group/th">
-                                                            QTY
-                                                            {!colsLocked && <div onMouseDown={(e) => startResize('qty', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 z-10" />}
-                                                        </th>
-                                                        {isAdmin && (
-                                                            <th style={{ width: colWidths.costo }} className="p-4 text-black text-center relative group/th">
-                                                                Costo (USD)
-                                                                {!colsLocked && <div onMouseDown={(e) => startResize('costo', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 z-10" />}
-                                                            </th>
-                                                        )}
-                                                        <th style={{ width: colWidths.precioUnit }} className="p-4 text-black text-center relative group/th">
-                                                            Precio Unit. (USD)
-                                                            {!colsLocked && <div onMouseDown={(e) => startResize('precioUnit', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 z-10" />}
-                                                        </th>
-                                                        {isAdmin && (
-                                                            <th style={{ width: colWidths.totalCosto }} className="p-4 text-right text-black relative group/th">
-                                                                Total Costo
-                                                                {!colsLocked && <div onMouseDown={(e) => startResize('totalCosto', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 z-10" />}
-                                                            </th>
-                                                        )}
-                                                        <th style={{ width: colWidths.totalVenta }} className="p-4 text-right text-black relative group/th">
-                                                            Total Venta
-                                                            {!colsLocked && <div onMouseDown={(e) => startResize('totalVenta', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 z-10" />}
-                                                        </th>
-                                                        <th className="p-4 w-12 text-center"></th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-white/5">
-                                                    {s.items.map((it) => {
-                                                        const r = calcItem(it);
-                                                        return (
-                                                            <tr key={it.id} className="group hover:bg-white/[0.02] transition-colors">
-                                                                <td className="p-4 text-center">
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={it.activo}
-                                                                        onChange={(e) => updateItem(s.id, it.id, { activo: e.target.checked })}
-                                                                        className="w-4 h-4 rounded border-gray-600 bg-transparent text-primary focus:ring-offset-black accent-primary"
-                                                                    />
-                                                                </td>
-
-                                                                <td className="p-4 align-top">
-                                                                    <div className="text-[10px] text-primary/70 font-black mb-1.5 px-px">{it.codigo}</div>
+                                {/* Table Body Section */}
+                                {!s.collapsed && (
+                                    <div
+                                        className="overflow-x-auto custom-scrollbar"
+                                        style={{ width: "100%" }}
+                                        ref={el => tableRefs.current[s.id] = el}
+                                        onScroll={(e) => handleTableScroll(s.id, e)}
+                                    >
+                                        <table className="table-fixed border-collapse" style={{ width: totalTableWidth, minWidth: totalTableWidth }}>
+                                            {/* Ghost Header for Alignment Anchor */}
+                                            <colgroup>
+                                                <col style={{ width: colWidths.item }} />
+                                                <col style={{ width: colWidths.equipo }} />
+                                                <col style={{ width: colWidths.descripcion }} />
+                                                <col style={{ width: colWidths.media }} />
+                                                <col style={{ width: colWidths.qty }} />
+                                                {isAdmin && <col style={{ width: colWidths.costo }} />}
+                                                {isAdmin && <col style={{ width: colWidths.util }} />}
+                                                <col style={{ width: colWidths.unitario }} />
+                                                <col style={{ width: colWidths.total }} />
+                                                {isAdmin && <col style={{ width: colWidths.action }} />}
+                                            </colgroup>
+                                            <tbody style={{ fontSize: `${tableFontSize}px` }}>
+                                                {s.items.map(it => {
+                                                    const r = calcItem(it);
+                                                    return (
+                                                        <tr key={it.id} className={`border-b border-white/[0.02] hover:bg-white/[0.01] transition-colors ${!it.activo && 'opacity-30'}`}>
+                                                            <td className="p-4 border-r border-white/[0.02]">
+                                                                <div className="flex flex-col items-center gap-2">
+                                                                    <button
+                                                                        onClick={() => updateItem(s.id, it.id, { activo: !it.activo })}
+                                                                        className={`w-6 h-6 rounded-md border flex items-center justify-center transition-all ${it.activo ? 'bg-primary border-primary text-black' : 'bg-transparent border-white/20 text-white/10 hover:border-white/40'}`}
+                                                                    >
+                                                                        {it.activo && <Check size={14} strokeWidth={4} />}
+                                                                    </button>
+                                                                    {isAdmin ? (
+                                                                        <input value={it.codigo} onChange={(e) => updateItem(s.id, it.id, { codigo: e.target.value })} className="bg-transparent border-b border-white/5 text-[11px] font-mono text-gray-400 w-full text-center focus:border-primary/50 outline-none" />
+                                                                    ) : (
+                                                                        <span className="text-[11px] font-mono text-gray-400">{it.codigo}</span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td className="p-4 border-r border-white/[0.02]">
+                                                                {isAdmin ? (
                                                                     <textarea
                                                                         value={it.equipo}
                                                                         onChange={(e) => updateItem(s.id, it.id, { equipo: e.target.value })}
-                                                                        readOnly={!isAdmin}
-                                                                        className={`w-full bg-transparent border-none p-2 -ml-2 text-white font-bold text-sm focus:ring-0 placeholder-gray-700 resize-none field-sizing-content leading-tight rounded-lg transition-all duration-200 overflow-hidden ${!it.activo ? 'line-through opacity-40' : ''} ${isAdmin ? 'hover:bg-white/5 focus:bg-white/5' : 'cursor-default'}`}
-                                                                        placeholder="Nombre del equipo"
-                                                                        rows={2}
-                                                                        style={{ minHeight: "2.8rem" }}
+                                                                        className={`bg-transparent text-sm font-black text-white w-full border-b border-white/5 outline-none focus:border-primary/50 resize-none overflow-hidden ${!it.activo ? 'line-through text-white/40' : ''}`}
+                                                                        rows={1}
+                                                                        style={{ fieldSizing: "content" }}
                                                                     />
-                                                                </td>
-
-                                                                <td className="p-4 align-top">
+                                                                ) : (
+                                                                    <span className={`text-sm font-black text-white uppercase tracking-tight ${!it.activo ? 'line-through text-white/40' : ''}`}>{it.equipo}</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="p-4 border-r border-white/[0.02]">
+                                                                {isAdmin ? (
                                                                     <textarea
                                                                         value={it.descripcion}
                                                                         onChange={(e) => updateItem(s.id, it.id, { descripcion: e.target.value })}
-                                                                        readOnly={!isAdmin}
-                                                                        className={`w-full bg-transparent border-none p-2 -ml-2 text-gray-400 text-sm focus:ring-0 placeholder-gray-800 resize-none field-sizing-content leading-relaxed rounded-lg transition-all duration-200 overflow-hidden ${!it.activo ? 'line-through opacity-40' : ''} ${isAdmin ? 'hover:bg-white/5 focus:bg-white/5' : 'cursor-default'}`}
-                                                                        placeholder="Descripción..."
-                                                                        rows={4}
-                                                                        style={{ minHeight: "6rem" }}
+                                                                        className="bg-transparent text-[11px] text-gray-500 w-full resize-none border-none outline-none focus:text-gray-300"
+                                                                        rows={1}
+                                                                        style={{ fieldSizing: "content" }}
                                                                     />
-                                                                </td>
-
-                                                                <td className="p-4 text-center align-top">
-                                                                    <div className="flex flex-col items-center gap-2">
-                                                                        {it.media_url ? (
-                                                                            <div className="relative group/media w-24 h-24 rounded-lg overflow-hidden border border-white/10 bg-black/40 shadow-lg cursor-pointer transition-transform hover:scale-105">
-                                                                                {it.media_type === 'video' ? (
-                                                                                    <div
-                                                                                        className="w-full h-full flex flex-col items-center justify-center p-2"
-                                                                                        onClick={() => setSelectedMedia({ url: it.media_url, type: 'video' })}
-                                                                                    >
-                                                                                        <Video size={24} className="text-primary mb-1" />
-                                                                                        <span className="text-[10px] text-primary/70 font-bold uppercase truncate w-full px-1">Video</span>
-                                                                                        <video src={it.media_url} className="hidden" />
-                                                                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/media:opacity-100 flex items-center justify-center transition-opacity">
-                                                                                            <Play size={24} className="text-white fill-white" />
-                                                                                        </div>
-                                                                                    </div>
-                                                                                ) : (
-                                                                                    <img
-                                                                                        src={it.media_url}
-                                                                                        alt="Preview"
-                                                                                        className="w-full h-full object-cover"
-                                                                                        onClick={() => setSelectedMedia({ url: it.media_url, type: 'image' })}
-                                                                                    />
-                                                                                )}
-
-                                                                                {isAdmin && (
-                                                                                    <button
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            updateItem(s.id, it.id, { media_url: null, media_type: null });
-                                                                                        }}
-                                                                                        className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white hover:bg-red-500 opacity-0 group-hover/media:opacity-100 transition-opacity"
-                                                                                    >
-                                                                                        <X size={12} />
-                                                                                    </button>
-                                                                                )}
+                                                                ) : (
+                                                                    <p className="text-[11px] text-gray-500 font-medium leading-relaxed">{it.descripcion}</p>
+                                                                )}
+                                                            </td>
+                                                            <td className="p-4 border-r border-white/[0.02]">
+                                                                <div className="flex flex-col items-center justify-center gap-2 group/media relative">
+                                                                    {it.media_url ? (
+                                                                        <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-white/10 group-hover:border-primary/50 transition-all shadow-lg hover:scale-110 cursor-pointer" onClick={() => setSelectedMedia({ url: it.media_url, type: it.media_type })}>
+                                                                            {it.media_type === 'video' ? (
+                                                                                <video src={it.media_url} className="w-full h-full object-cover" />
+                                                                            ) : (
+                                                                                <img src={it.media_url} alt="" className="w-full h-full object-cover" />
+                                                                            )}
+                                                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/media:opacity-100 transition-opacity">
+                                                                                <Maximize2 size={14} className="text-white" />
                                                                             </div>
-                                                                        ) : (
-                                                                            isAdmin && (
-                                                                                <div className="relative">
-                                                                                    <input
-                                                                                        type="file"
-                                                                                        accept="image/*,video/*"
-                                                                                        name={`media-${it.id}`}
-                                                                                        id={`media-${it.id}`}
-                                                                                        className="hidden"
-                                                                                        onChange={(e) => handleMediaUpload(s.id, it.id, e.target.files[0])}
-                                                                                    />
-                                                                                    <label
-                                                                                        htmlFor={`media-${it.id}`}
-                                                                                        className="flex flex-col items-center justify-center w-24 h-24 rounded-lg border-2 border-dashed border-white/10 bg-white/5 hover:bg-white/10 hover:border-primary/50 transition-all cursor-pointer group/upload"
-                                                                                    >
-                                                                                        {uploadingId === it.id ? (
-                                                                                            <Loader2 size={24} className="text-primary animate-spin" />
-                                                                                        ) : (
-                                                                                            <>
-                                                                                                <Upload size={20} className="text-gray-600 group-hover/upload:text-primary mb-1 transition-colors" />
-                                                                                                <span className="text-[10px] text-gray-500 group-hover/upload:text-primary/70 font-bold uppercase">Subir</span>
-                                                                                            </>
-                                                                                        )}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="flex items-center justify-center">
+                                                                            {isAdmin ? (
+                                                                                <div className="flex gap-1">
+                                                                                    <label className="p-2 rounded-lg bg-white/5 border border-white/10 text-gray-500 hover:text-primary hover:border-primary/50 cursor-pointer transition-all">
+                                                                                        {uploadingId === it.id ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+                                                                                        <input type="file" className="hidden" accept="image/*" onChange={(e) => handleItemMediaUpload(s.id, it.id, e.target.files[0])} disabled={uploadingId === it.id} />
+                                                                                    </label>
+                                                                                    <label className="p-2 rounded-lg bg-white/5 border border-white/10 text-gray-500 hover:text-primary hover:border-primary/50 cursor-pointer transition-all">
+                                                                                        {uploadingId === it.id ? <Loader2 size={14} className="animate-spin" /> : <Video size={14} />}
+                                                                                        <input type="file" className="hidden" accept="video/*" onChange={(e) => handleItemMediaUpload(s.id, it.id, e.target.files[0])} disabled={uploadingId === it.id} />
                                                                                     </label>
                                                                                 </div>
-                                                                            )
-                                                                        )}
-                                                                    </div>
-                                                                </td>
-
-                                                                {isAdmin && (
-                                                                    <td className="p-4">
-                                                                        <input
-                                                                            type="number"
-                                                                            value={it.utilidad !== undefined ? it.utilidad : 10}
-                                                                            onChange={(e) => updateItem(s.id, it.id, { utilidad: n(e.target.value) })}
-                                                                            className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-primary font-bold focus:border-primary/50 focus:outline-none hover:border-primary hover:text-primary transition-colors text-center"
-                                                                        />
-                                                                    </td>
+                                                                            ) : (
+                                                                                <Camera size={16} className="text-white/5" />
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+                                                                    {isAdmin && it.media_url && (
+                                                                        <button
+                                                                            onClick={() => updateItem(s.id, it.id, { media_url: null, media_type: null })}
+                                                                            className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover/media:opacity-100 transition-opacity scale-75 hover:scale-100"
+                                                                        >
+                                                                            <X size={10} />
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td className="p-4 border-r border-white/[0.02]">
+                                                                {isAdmin ? (
+                                                                    <input type="number" value={it.qty} onChange={(e) => updateItem(s.id, it.id, { qty: n(e.target.value) })} className="bg-white/5 border border-white/10 rounded px-2 py-1 text-xs font-mono text-white w-full focus:border-primary/50 outline-none" />
+                                                                ) : (
+                                                                    <span className="text-xs font-mono text-gray-300">{it.qty}</span>
                                                                 )}
-
-                                                                <td className="p-4">
-                                                                    <input
-                                                                        type="number"
-                                                                        value={it.qty}
-                                                                        min={0}
-                                                                        step={1}
-                                                                        readOnly={!isAdmin}
-                                                                        onChange={(e) => updateItem(s.id, it.id, { qty: n(e.target.value) })}
-                                                                        className={`w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-white text-right font-mono focus:border-primary/50 focus:outline-none transition-colors ${isAdmin ? 'hover:border-primary hover:text-primary' : 'cursor-default pointer-events-none'}`}
-                                                                    />
+                                                            </td>
+                                                            {isAdmin && (
+                                                                <td className="p-4 text-right border-r border-white/[0.02]">
+                                                                    <input type="number" value={it.costoUSD} onChange={(e) => updateItem(s.id, it.id, { costoUSD: n(e.target.value) })} className="bg-white/5 border border-white/10 rounded px-2 py-1 text-xs font-mono text-white w-full text-right focus:border-primary/50 outline-none" />
                                                                 </td>
-
-                                                                {isAdmin && (
-                                                                    <td className="p-4">
-                                                                        <input
-                                                                            type="number"
-                                                                            value={it.costoUSD}
-                                                                            min={0}
-                                                                            step={100}
-                                                                            onChange={(e) => updateItem(s.id, it.id, { costoUSD: n(e.target.value) })}
-                                                                            className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-gray-300 text-right font-mono text-sm focus:border-primary/50 focus:outline-none hover:border-primary hover:text-primary transition-colors"
-                                                                        />
-                                                                    </td>
-                                                                )}
-
-                                                                <td className="p-4">
-                                                                    <input
-                                                                        type="text"
-                                                                        value={money(r.ventaUnitFinal)}
-                                                                        disabled
-                                                                        className={`w-full bg-transparent border-none px-2 py-1 text-primary text-right font-mono text-sm font-bold cursor-default ${!it.activo ? 'line-through opacity-40' : ''}`}
-                                                                    />
+                                                            )}
+                                                            {isAdmin && (
+                                                                <td className="p-4 text-center border-r border-white/[0.02]">
+                                                                    <input type="number" value={it.utilidad} onChange={(e) => updateItem(s.id, it.id, { utilidad: n(e.target.value) })} className="bg-primary/5 border border-primary/20 rounded px-2 py-1 text-xs font-mono text-primary w-full text-center focus:border-primary/50 outline-none" />
                                                                 </td>
-
-                                                                {isAdmin && (
-                                                                    <td className="p-4 text-right font-mono text-gray-400 text-sm">
-                                                                        {money(r.totalCosto)}
-                                                                    </td>
-                                                                )}
-                                                                <td className={`p-4 text-right font-mono text-primary font-bold text-sm ${!it.activo ? 'line-through opacity-40' : ''}`}>
-                                                                    {money(r.totalVenta)}
+                                                            )}
+                                                            <td className={`px-4 text-right text-xs font-mono border-r border-white/5 ${!it.activo ? 'line-through text-gray-600' : 'text-gray-400'}`}>
+                                                                {money(r.ventaUnitFinal)}
+                                                            </td>
+                                                            <td className={`px-4 text-right text-sm font-black tracking-tight border-r border-white/5 ${!it.activo ? 'line-through text-primary/30' : 'text-primary'}`}>
+                                                                {money(r.totalVenta)}
+                                                            </td>
+                                                            {isAdmin && (
+                                                                <td className="px-4 text-center border-r border-white/5">
+                                                                    <button onClick={() => removeItem(s.id, it.id)} className="text-red-500 opacity-20 hover:opacity-100 transition-opacity"><X size={14} /></button>
                                                                 </td>
-
-                                                                <td className="p-4 text-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                    <button
-                                                                        onClick={() => removeItem(s.id, it.id)}
-                                                                        className="text-gray-600 hover:text-red-500 transition-colors bg-white/5 p-1 rounded hover:bg-white/10"
-                                                                        title="Eliminar"
-                                                                    >
-                                                                        ✕
-                                                                    </button>
-                                                                </td>
-                                                            </tr>
-                                                        );
-                                                    })}
-
-                                                    {/* Subtotales */}
-                                                    <tr className="bg-white/[0.03] font-bold border-t border-white/10">
-                                                        <td colSpan={7} className="p-4 text-right text-xs uppercase tracking-wider text-gray-500">
-                                                            Subtotal sección
-                                                        </td>
-                                                        <td className="p-4 text-right font-mono text-gray-300">{money(totals.totalCosto)}</td>
-                                                        <td className="p-4 text-right font-mono text-primary text-lg">{money(totals.totalVenta)}</td>
-                                                        <td></td>
-                                                    </tr>
-                                                </tbody>
-                                            </table>
-                                        </div>
+                                                            )}
+                                                        </tr>
+                                                    );
+                                                })}
+                                                {isAdmin && <tr><td colSpan={isAdmin ? 10 : 7} className="p-4"><button onClick={() => addItem(s.id)} className="w-full py-3 border border-dashed border-white/10 rounded-xl text-gray-500 hover:text-primary hover:border-primary transition-all text-xs font-bold uppercase tracking-widest">+ Agregar Fila al Módulo</button></td></tr>}
+                                            </tbody>
+                                            <tfoot>
+                                                <tr className="bg-white/[0.02] font-black border-t border-white/5">
+                                                    <td colSpan={isAdmin ? 8 : 6} className="p-4 text-right text-[10px] text-gray-500 uppercase tracking-[0.2em]">Subtotal Módulo</td>
+                                                    <td className="p-4 text-right text-lg text-primary tracking-tighter">{money(sectionTotals.find(x => x.sectionId === s.id)?.totalVenta || 0)}</td>
+                                                    {isAdmin && <td className="p-4 border-l border-white/[0.02]"></td>}
+                                                </tr>
+                                            </tfoot>
+                                        </table>
                                     </div>
                                 )}
                             </div>
@@ -1158,170 +991,131 @@ export default function MasterPlan() {
                     })}
                 </div>
 
-                {/* Resumen final */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-12 mb-12">
-                    {/* Costos */}
-                    <div className="p-6 rounded-2xl border border-white/10 bg-zinc-900/80 backdrop-blur">
-                        <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Total Costo Estimado (USD)</div>
-                        <div className="text-4xl font-extrabold text-white tracking-tighter mb-6">{money(grandTotals.totalCosto)}</div>
-
-                        <div className="space-y-3 pt-6 border-t border-white/10 text-sm">
-                            <Row label="Tipo de cambio" value={`${n(tipoCambio).toFixed(4)} MXN/USD`} />
-                            <Row label="Subtotal MXN (sin IVA)" value={fmtMXN(grandTotals.mxnSinIvaCosto)} />
-                            <Row label={`IVA ${n(ivaPct).toFixed(0)}% (MXN)`} value={fmtMXN(grandTotals.ivaCosto)} />
-                            <Row label="Total MXN (con IVA)" value={fmtMXN(grandTotals.mxnConIvaCosto)} strong color="text-gray-300" />
+                {/* Footer Sumary */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-20 p-8 bg-zinc-950/40 border border-white/5 rounded-[2.5rem] backdrop-blur-xl">
+                    <div className="space-y-6">
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Costo Total Estimado</span>
+                            {isAdmin ? <span className="text-4xl font-black text-white tracking-tighter">{money(grandTotals.totalCosto)}</span> : <span className="text-4xl font-black text-white/5 tracking-tighter">$ --.---,--</span>}
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 text-[11px] font-bold uppercase tracking-widest opacity-60">
+                            <div>MXN s/IVA: <span className="text-white ml-2">{fmtMXN(grandTotals.mxnSinIvaVenta / (1 + n(ivaPct) / 100))}</span></div>
+                            <div>IVA {ivaPct}%: <span className="text-white ml-2">{fmtMXN(grandTotals.ivaVenta)}</span></div>
                         </div>
                     </div>
-
-                    {/* Venta */}
-                    <div className="p-6 rounded-2xl border border-primary/20 bg-gradient-to-br from-zinc-900 to-black relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
-
-                        <div className="text-xs font-bold text-primary uppercase tracking-widest mb-1">Total Precio de Venta (USD)</div>
-                        <div className="text-5xl font-extrabold text-primary tracking-tighter mb-6 shadow-glow">{money(grandTotals.totalVenta)}</div>
-
-                        <div className="space-y-3 pt-6 border-t border-white/10 text-sm relative z-10">
-                            <Row label="Tipo de cambio" value={`${n(tipoCambio).toFixed(4)} MXN/USD`} />
-                            <Row label="Subtotal MXN (sin IVA)" value={fmtMXN(grandTotals.mxnSinIvaVenta)} />
-                            <Row label={`IVA ${n(ivaPct).toFixed(0)}% (MXN)`} value={fmtMXN(grandTotals.ivaVenta)} />
-                            <Row label="Total MXN (con IVA)" value={fmtMXN(grandTotals.mxnConIvaVenta)} strong color="text-primary" />
-                        </div>
+                    <div className="p-8 bg-primary rounded-[2rem] flex flex-col justify-center items-end relative overflow-hidden group/final text-black shadow-2xl shadow-primary/20">
+                        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/20 to-transparent pointer-events-none" />
+                        <span className="relative z-10 text-[11px] font-black uppercase tracking-[0.3em] opacity-80 mb-2">Precio de Venta Sugerido (USD)</span>
+                        <h2 className="relative z-10 text-6xl font-black tracking-tighter">{money(grandTotals.totalVenta)}</h2>
+                        <div className="relative z-10 mt-4 text-xs font-black tracking-widest opacity-80 uppercase">≈ {fmtMXN(grandTotals.mxnConIvaVenta)} MXN (c/IVA)</div>
                     </div>
                 </div>
 
-                <div className="text-center text-gray-600 text-xs py-10 border-t border-white/5 mt-10">
-                    <p>Nota: Los rubros “Pendiente” están en $0 hasta que se actualice la cotización. Los totales reflejan solo los equipos activos.</p>
+                {/* Versión Footer */}
+                <div className="mt-20 text-center opacity-30">
+                    <img src="/solifood-logo.png" alt="Footer Logo" className="h-8 object-contain mx-auto grayscale brightness-200 mb-4" />
+                    <p className="text-[10px] font-black uppercase tracking-[0.4em]">Solifood Center · Industrial Planning Solutions · 2024</p>
                 </div>
-
-                <style>{`
-        @media print {
-          body { background: white !important; color: black !important; }
-          .min-h-screen { min-height: 0 !important; height: auto !important; background: white !important; }
-          .bg-black { background: white !important; }
-          .text-white { color: black !important; }
-          .text-gray-400 { color: #444 !important; }
-          .border-white\\/10 { border-color: #ddd !important; }
-          .bg-white\\/5 { background: #f9f9f9 !important; border-color: #eee !important; }
-          
-          /* Hide buttons */
-          button { display: none !important; }
-          
-          /* Simplify inputs for print */
-          input { 
-            background: transparent !important; 
-            border: none !important; 
-            color: black !important;
-            padding: 0 !important;
-          }
-          
-          /* Colors */
-          .text-primary { color: black !important; font-weight: bold !important; }
-          .bg-primary { background: #eee !important; color: black !important; }
-          
-          /* Structural */
-          .glass-panel { border: 1px solid #ccc !important; box-shadow: none !important; background: white !important; }
-          
-          th { color: black !important; border-bottom: 2px solid #000 !important; }
-        }
-      `}</style>
             </div>
 
-            {/* Modal de Zoom Multimedia */}
-            {selectedMedia && (
-                <div
-                    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-md p-4 sm:p-10"
-                    onClick={() => setSelectedMedia(null)}
-                >
-                    <button
-                        onClick={() => setSelectedMedia(null)}
-                        className="absolute top-6 right-6 p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition-all z-[110] border border-white/10 hover:rotate-90"
+            {/* Hero Video Overlay - Simplified v2.34.2 */}
+            <AnimatePresence>
+                {isHeroVideoActive && !heroVideoIsIntegrated && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.5 }}
+                        className="fixed inset-0 z-[200] bg-black flex items-center justify-center p-4 sm:p-20"
                     >
-                        <X size={24} />
-                    </button>
-
-                    <div
-                        className="relative max-w-5xl w-full max-h-full flex items-center justify-center"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        {selectedMedia.type === 'video' ? (
-                            <div className="w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-white/10">
+                        {heroVideoUrl && (
+                            <motion.div
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 1.1, opacity: 0 }}
+                                transition={{ type: "spring", damping: 25, stiffness: 120 }}
+                                className="relative w-full h-full flex items-center justify-center"
+                            >
                                 <video
-                                    src={selectedMedia.url}
-                                    controls
+                                    src={heroVideoUrl}
                                     autoPlay
-                                    className="w-full h-full object-contain"
+                                    onEnded={() => setIsHeroVideoActive(false)}
+                                    className="w-full h-full object-contain rounded-3xl"
+                                    style={{ borderRadius: `${heroVideoBorderRadius}px`, transform: `scale(${heroVideoScale / 100})` }}
                                 />
-                            </div>
-                        ) : (
-                            <img
-                                src={selectedMedia.url}
-                                alt="Zoom"
-                                className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl border border-white/10"
-                            />
+                                <button
+                                    onClick={() => setIsHeroVideoActive(false)}
+                                    className="absolute top-10 right-10 p-5 rounded-full bg-white/10 text-white hover:bg-red-500 transition-all border border-white/10 group backdrop-blur-md z-[210]"
+                                >
+                                    <X size={32} className="group-hover:rotate-90 transition-transform" />
+                                </button>
+                            </motion.div>
                         )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
-                        <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/10 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                            Vista previa del equipo
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* Item Media Lightbox */}
+            <AnimatePresence>
+                {selectedMedia && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[300] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4 md:p-12"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 1.1, opacity: 0 }}
+                            className="relative max-w-7xl w-full h-full flex items-center justify-center"
+                        >
+                            {selectedMedia.type === 'video' ? (
+                                <video src={selectedMedia.url} controls autoPlay className="max-w-full max-h-full rounded-2xl shadow-2xl border border-white/10" />
+                            ) : (
+                                <img src={selectedMedia.url} alt="" className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl border border-white/10" />
+                            )}
+                            <button
+                                onClick={() => setSelectedMedia(null)}
+                                className="absolute top-4 right-4 md:-top-4 md:-right-4 p-4 rounded-full bg-white/10 text-white hover:bg-red-500 transition-all border border-white/10 backdrop-blur-md z-[310]"
+                            >
+                                <X size={24} />
+                            </button>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
 
 function Field({ label, value, onChange }) {
     return (
-        <div className="min-w-[140px]">
-            <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">{label}</div>
-            <input
-                type="number"
-                value={value}
-                onChange={(e) => onChange(Number(e.target.value))}
-                className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white font-mono focus:border-primary/60 focus:ring-1 focus:ring-primary/60 hover:border-primary hover:shadow-[0_0_15px_rgba(255,214,10,0.15)] outline-none transition-all placeholder-gray-700"
-            />
+        <div className="flex flex-col gap-1.5 focus-within:translate-x-1 transition-transform">
+            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{label}</span>
+            <input type="number" value={value} onChange={(e) => onChange(Number(e.target.value))} className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm font-mono text-white focus:border-primary/50 focus:bg-white/10 outline-none transition-all" />
         </div>
     );
 }
 
-function FieldDark({ label, value, onChange, compact }) {
+function HeaderCell({ label, width, onResize, locked, align = "left" }) {
     return (
-        <div className={compact ? "w-24" : "min-w-[180px]"}>
-            <div className="text-xs font-bold text-primary/80 uppercase tracking-wider mb-2">{label}</div>
-            <input
-                type="number"
-                value={value}
-                onChange={(e) => onChange(Number(e.target.value))}
-                className="w-full bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-white font-mono focus:border-primary focus:ring-1 focus:ring-primary hover:border-primary hover:shadow-[0_0_15px_rgba(255,214,10,0.15)] outline-none transition-all"
-            />
+        <div
+            style={{ width }}
+            className={`px-4 flex items-center border-r border-black/5 flex-shrink-0 relative group/cell h-full ${align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start"}`}
+        >
+            <span className="truncate block" title={label}>{label}</span>
+            {!locked && (
+                <div
+                    onMouseDown={onResize}
+                    className="absolute right-0 top-0 w-1 h-full cursor-col-resize hover:bg-black/20 z-10"
+                    title="Arrastra para redimensionar"
+                />
+            )}
         </div>
     );
 }
 
-function KPI({ label, value }) {
-    return (
-        <div className="bg-black/40 border border-white/5 rounded-xl p-4 hover:border-white/10 transition-colors">
-            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">{label}</div>
-            <div className="text-xl font-bold text-white tracking-tight">{value}</div>
-        </div>
-    );
-}
-
-function Row({ label, value, strong, color }) {
-    return (
-        <div className={`flex justify-between items-center gap-4 ${strong ? 'font-extrabold text-base' : 'font-medium'}`}>
-            <span className={strong ? "text-gray-300" : "text-gray-500"}>{label}</span>
-            <span className={color || (strong ? "text-white" : "text-gray-300")}>{value}</span>
-        </div>
-    );
-}
-
-function fmt0(v) {
-    return Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 });
-}
-function fmt1(v) {
-    return Number(v).toLocaleString("en-US", { maximumFractionDigits: 1 });
-}
 function fmtMXN(v) {
     return v.toLocaleString("es-MX", { style: "currency", currency: "MXN" });
 }

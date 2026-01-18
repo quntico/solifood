@@ -58,20 +58,32 @@ const Header = ({
       <header className="relative bg-black text-white z-30">
         <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-800 h-16 sm:h-20">
           {/* Left section: Hamburger (Mobile) & Logo */}
-          <div className="flex-1 flex items-center gap-2 sm:gap-4">
-            {/* Hamburger Button - Visible only on mobile */}
-            <button
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="lg:hidden p-2 text-white hover:bg-gray-800 rounded-md transition-colors z-50"
-              aria-label="Abrir menú"
-            >
-              <Menu size={28} />
-            </button>
+          <div className="flex-1 flex items-center justify-start gap-2">
+            <div className="lg:hidden">
+              <MobileMenu
+                isOpen={isMobileMenuOpen}
+                onClose={() => setIsMobileMenuOpen(false)}
+                sections={sections || []}
+                activeSection={activeSection}
+                onSectionSelect={onSectionSelect}
+                onHomeClick={onHomeClick}
+                isAdminView={isAdminView}
+                isAdminAuthenticated={isAdminAuthenticated}
+                onAdminLogin={onAdminLogin}
+                onAdminLogout={onAdminLogout}
+                onCotizadorClick={onCotizadorClick}
+                onSubItemSelect={onSubItemSelect}
+                activeTabMap={activeTabMap}
+                isEditorMode={isEditorMode}
+                setIsEditorMode={setIsEditorMode}
+                onAdminClick={onAdminClick}
+              />
+            </div>
 
             {finalLogoUrl && (
               <div className="relative flex items-center">
                 <button onClick={onLogoClick} className="focus:outline-none focus:ring-2 focus:ring-primary rounded-md">
-                  <div className="header-logo-container scale-75 sm:scale-100 origin-left" style={logoContainerStyle}>
+                  <div className="header-logo-container scale-[0.6] sm:scale-100 origin-left" style={logoContainerStyle}>
                     <img
                       src={finalLogoUrl}
                       alt={`${company} Logo`}
@@ -80,9 +92,12 @@ const Header = ({
                   </div>
                 </button>
                 {/* Refined Version Badge: Píldora con LED Online */}
-                <div className="absolute -bottom-1 -right-4 translate-x-full hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/80 border border-white/20 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-sm">
+                <div
+                  onDoubleClick={onAdminLogin}
+                  className="absolute -bottom-1 -right-4 translate-x-full hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/80 border border-white/20 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-sm cursor-pointer select-none hover:border-primary/50 transition-colors"
+                >
                   <div className="w-2 h-2 rounded-full bg-[#22c55e] shadow-[0_0_8px_#22c55e] animate-pulse" />
-                  <span className="text-[9px] font-mono font-bold text-gray-300 tracking-[0.2em] whitespace-nowrap uppercase">Ver 2.22</span>
+                  <span className="text-[9px] font-mono font-bold text-gray-300 tracking-[0.2em] whitespace-nowrap uppercase">Ver 3.0</span>
                 </div>
               </div>
             )}
