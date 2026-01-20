@@ -19,6 +19,11 @@ import { Slider } from "@/components/ui/slider";
 const STORAGE_KEY = "solifood_masterplan_v1_autonomo";
 const DEFAULT_CLOUD_SLUG = "master-plan";
 
+const STICKY_OFFSETS = {
+    header_compact: 64, // Height of the slim main header
+    module_title: 56,   // Height of the module title bar
+};
+
 const n = (v) => {
     const x = Number(v);
     return Number.isFinite(x) ? x : 0;
@@ -147,6 +152,22 @@ export default function MasterPlan() {
     const [tipoCambio, setTipoCambio] = useState(18.5);
     const [ivaPct, setIvaPct] = useState(16);
     const [isAdmin, setIsAdmin] = useState(false);
+    const [isScrolled, setIsScrolled] = useState(false);
+    const tableContainerRefs = useRef({});
+    const virtualHeaderRefs = useRef({});
+
+    const syncScroll = (id, e) => {
+        if (virtualHeaderRefs.current[id]) {
+            virtualHeaderRefs.current[id].scrollLeft = e.target.scrollLeft;
+        }
+    };
+    useEffect(() => {
+        const handleScroll = () => {
+            setIsScrolled(window.scrollY > 100);
+        };
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
     const [uploadingId, setUploadingId] = useState(null);
     const [selectedMedia, setSelectedMedia] = useState(null);
     const [colsLocked, setColsLocked] = useState(() => localStorage.getItem("solifood_masterplan_colsLocked") === "true");
@@ -156,6 +177,7 @@ export default function MasterPlan() {
     const [projectName, setProjectName] = useState(() => localStorage.getItem("solifood_mp_project") || "CDA 2000");
     const [projectDesc, setProjectDesc] = useState(() => localStorage.getItem("solifood_mp_desc") || "Proyecto desde grano + 2 líneas de tabletas + polvo bebida + empaque.");
     const [projectDate, setProjectDate] = useState(() => localStorage.getItem("solifood_mp_date") || new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' }));
+    const [logoUrl, setLogoUrl] = useState(() => localStorage.getItem("solifood_mp_logo") || "");
 
     const [mpTitle, setMpTitle] = useState(() => localStorage.getItem("solifood_mp_title") || "MASTER PLAN");
     const [mpSubTitle, setMpSubTitle] = useState(() => localStorage.getItem("solifood_mp_subtitle") || "INDUSTRIAL CENTER");
@@ -169,6 +191,7 @@ export default function MasterPlan() {
     const [tableFontSize, setTableFontSize] = useState(() => Number(localStorage.getItem("solifood_mp_table_font_size")) || 14);
     const [isHydrated, setIsHydrated] = useState(false); // Guard to prevent overwriting cloud data with defaults
 
+    const logoRef = useRef(null);
     const heroVideoInputRef = useRef(null);
     const fileInputRef = useRef(null);
     const tableRefs = useRef({});
@@ -200,6 +223,7 @@ export default function MasterPlan() {
         localStorage.setItem("solifood_mp_project", projectName);
         localStorage.setItem("solifood_mp_desc", projectDesc);
         localStorage.setItem("solifood_mp_date", projectDate);
+        localStorage.setItem("solifood_mp_logo", logoUrl);
         localStorage.setItem("solifood_mp_title", mpTitle);
         localStorage.setItem("solifood_mp_subtitle", mpSubTitle);
         localStorage.setItem("solifood_mp_hero_video", heroVideoUrl);
@@ -232,6 +256,8 @@ export default function MasterPlan() {
                 if (config.projectDate) setProjectDate(config.projectDate);
                 if (config.mpTitle) setMpTitle(config.mpTitle);
                 if (config.mpSubTitle) setMpSubTitle(config.mpSubTitle);
+                if (config.logoUrl) setLogoUrl(config.logoUrl);
+                else if (data.logo_url) setLogoUrl(data.logo_url);
 
                 // HYDRATION PROTECTION: Check both column and config
                 const cloudVideoUrl = data.video_url || config.heroVideoUrl;
@@ -261,13 +287,16 @@ export default function MasterPlan() {
         }
     };
 
-    const saveToCloud = async (overrideConfig = null) => {
+    const saveToCloud = async (passedConfig = null) => {
         setIsCloudSyncing(true);
+        // Guard against React/DOM events being passed as config
+        const overrideConfig = (passedConfig && passedConfig.nativeEvent) ? null : passedConfig;
+
         const configToSave = overrideConfig || {
             clientName, projectName, projectDesc, projectDate,
             mpTitle, mpSubTitle, heroVideoUrl, heroVideoIsIntegrated,
             heroVideoScale, heroVideoBorderRadius,
-            tableFontSize,
+            tableFontSize, logoUrl,
             sections, // Standard sections array
             // metadata fallback
             heroVideoUrl: heroVideoUrl
@@ -285,24 +314,25 @@ export default function MasterPlan() {
                     sections_config: configToSave,
                     video_url: currentVideoUrl,
                     updated_at: updatedDate,
-                    project: projectName,
-                    client: clientName
+                    project: configToSave.projectName || projectName,
+                    client: configToSave.clientName || clientName,
+                    logo_url: configToSave.logoUrl || logoUrl
                 })
                 .eq('slug', CLOUD_SLUG);
 
             if (updateError) {
                 console.warn("[MasterPlan] Primary update failed (could be missing column or slug):", updateError);
 
-                // If the error is about missing column (42703), try saving WITHOUT video_url column
-                if (updateError.code === '42703') {
-                    console.log("[MasterPlan] missing video_url column, falling back to config only...");
+                // If the error is about missing column (42703 or PGRST204), try saving WITHOUT video_url/logo_url columns
+                if (updateError.code === '42703' || updateError.code === 'PGRST204') {
+                    console.log("[MasterPlan] missing columns, falling back to config only...");
                     const { error: fallbackError } = await supabase
                         .from('quotations')
                         .update({
                             sections_config: configToSave,
                             updated_at: updatedDate,
-                            project: projectName,
-                            client: clientName
+                            project: configToSave.projectName || projectName,
+                            client: configToSave.clientName || clientName
                         })
                         .eq('slug', CLOUD_SLUG);
 
@@ -315,16 +345,17 @@ export default function MasterPlan() {
                             slug: CLOUD_SLUG,
                             theme_key: `mp_${uid()}`,
                             sections_config: configToSave,
-                            video_url: currentVideoUrl, // This might fail too if column empty
+                            video_url: currentVideoUrl,
+                            logo_url: configToSave.logoUrl || logoUrl,
                             updated_at: updatedDate,
-                            project: projectName,
-                            client: clientName,
-                            title: mpTitle,
+                            project: configToSave.projectName || projectName,
+                            client: configToSave.clientName || clientName,
+                            title: configToSave.mpTitle || mpTitle,
                             is_home: false
                         }, { onConflict: 'slug' });
 
                     if (insertError) {
-                        console.warn("[MasterPlan] Upsert with video_url failed, retrying without it...");
+                        console.warn("[MasterPlan] Upsert failed, retrying without extended columns...");
                         const { error: insertFallbackError } = await supabase
                             .from('quotations')
                             .upsert({
@@ -332,9 +363,9 @@ export default function MasterPlan() {
                                 theme_key: `mp_${uid()}`,
                                 sections_config: configToSave,
                                 updated_at: updatedDate,
-                                project: projectName,
-                                client: clientName,
-                                title: mpTitle,
+                                project: configToSave.projectName || projectName,
+                                client: configToSave.clientName || clientName,
+                                title: configToSave.mpTitle || mpTitle,
                                 is_home: false
                             }, { onConflict: 'slug' });
 
@@ -404,12 +435,36 @@ export default function MasterPlan() {
     };
 
     const toggleAdmin = () => {
-        if (isAdmin) setIsAdmin(false);
-        else {
-            const pwd = prompt("Ingrese clave de administrador:");
-            if (pwd === "2020") setIsAdmin(true);
-            else alert("Clave incorrecta");
-        }
+        setIsAdmin(!isAdmin);
+    };
+
+    const handleLogoUpload = async (file) => {
+        if (!file) return;
+        setUploadingId('logo');
+        try {
+            const bucket = await getActiveBucket();
+            const fileName = `logo_${Date.now()}.${file.name.split('.').pop()}`;
+            const filePath = `masterplan/${fileName}`;
+            const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file);
+            if (uploadError) throw uploadError;
+            const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filePath);
+
+            setLogoUrl(publicUrl);
+
+            // Pass the literal updated config to avoid stale state in saveToCloud
+            const updatedConfig = {
+                clientName, projectName, projectDesc, projectDate,
+                mpTitle, mpSubTitle, logoUrl: publicUrl, heroVideoUrl,
+                heroVideoIsIntegrated, heroVideoScale, heroVideoBorderRadius,
+                tableFontSize, sections
+            };
+            await saveToCloud(updatedConfig);
+
+            toast({ title: "Logotipo actualizado", description: "El logo se ha subido y guardado en la nube." });
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error", description: "No se pudo subir o guardar el logotipo.", variant: "destructive" });
+        } finally { setUploadingId(null); }
     };
 
     const handleHeroVideoUpload = async (file) => {
@@ -564,49 +619,63 @@ export default function MasterPlan() {
         <div className="min-h-screen bg-black text-white px-8 md:px-16 lg:px-32 py-12 pb-32 bg-[url('https://horizons-cdn.hostinger.com/0f98fff3-e5cd-4ceb-b0fd-55d6f1d7dd5c/dcea69d21f8fa04833cff852034084fb.png')] bg-cover bg-fixed bg-center relative">
             <div className="absolute inset-0 bg-black/90 backdrop-blur-[2px] z-0" />
 
-            <div className="relative z-10 w-full max-w-[1920px] mx-auto">
+            <div className={`relative z-[100] w-full max-w-[1920px] mx-auto transition-all duration-500 ${isScrolled ? 'pt-24' : ''}`}>
                 {/* Header Container */}
-                <div className="flex flex-col md:flex-row items-center justify-between gap-8 mb-12 bg-zinc-950/40 p-8 rounded-[2.5rem] border border-white/5 backdrop-blur-xl relative z-[100] overflow-visible group/header">
+                <div className={`flex flex-col md:flex-row items-center justify-between gap-8 mb-12 bg-zinc-950/40 p-8 rounded-[2.5rem] border border-white/5 backdrop-blur-xl transition-all duration-500 group/header ${isScrolled ? 'fixed top-4 left-8 right-8 md:left-16 md:right-16 lg:left-32 lg:right-32 z-[200] !p-3 !mb-0 !gap-4 !rounded-2xl shadow-2xl scale-[0.98] border-primary/20' : 'relative z-[100]'}`}>
                     {/* Left side */}
-                    <div className="flex items-center gap-6 flex-1 justify-start">
-                        <button onClick={() => navigate('/')} className="p-3 rounded-full bg-white/5 hover:bg-primary hover:text-black text-gray-400 transition-all group/back">
-                            <X size={24} className="group-hover:rotate-90 transition-transform" />
+                    <div className={`flex items-center gap-6 flex-1 justify-start transition-all duration-500 ${isScrolled ? '!gap-3' : ''}`}>
+                        <button onClick={() => navigate('/')} className={`p-3 rounded-full bg-white/5 hover:bg-primary hover:text-black text-gray-400 transition-all group/back ${isScrolled ? '!p-2' : ''}`}>
+                            <X size={isScrolled ? 18 : 24} className="group-hover:rotate-90 transition-transform" />
                         </button>
-                        <div className="flex flex-col gap-2">
-                            <img src="/solifood-logo.png" alt="Logo" className="h-16 object-contain" />
-                            <div className="flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-black/50 border border-white/10 w-fit">
-                                <div className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse" />
-                                <span className="text-[9px] font-mono font-bold text-gray-400 tracking-[0.2em]">Ver 3.0</span>
+                        <div className="flex flex-col gap-1">
+                            <div className={`relative group/logo ${isAdmin ? 'cursor-pointer' : ''}`} onClick={() => isAdmin && logoRef.current?.click()}>
+                                <img src={logoUrl || "/solifood-logo.png"} alt="Logo" className={`object-contain transition-all duration-500 ${isScrolled ? 'h-8' : 'h-16'}`} />
+                                {isAdmin && (
+                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/logo:opacity-100 transition-opacity rounded-lg">
+                                        {uploadingId === 'logo' ? <Loader2 size={16} className="text-white animate-spin" /> : <Camera size={16} className="text-white" />}
+                                    </div>
+                                )}
+                                <input type="file" ref={logoRef} className="hidden" accept="image/*" onChange={(e) => handleLogoUpload(e.target.files[0])} />
                             </div>
+                            {!isScrolled && (
+                                <div className="flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-black/50 border border-white/10 w-fit">
+                                    <div className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse" />
+                                    <span className="text-[9px] font-mono font-bold text-gray-400 tracking-[0.2em]">Ver 3.52</span>
+                                </div>
+                            )}
                         </div>
                     </div>
 
                     {/* Center side */}
-                    <div className="flex flex-col items-center text-center flex-[2]">
-                        <div className="mb-2 w-full flex flex-col items-center relative">
+                    <div className={`flex flex-col items-center text-center transition-all duration-500 ${isScrolled ? 'flex-row gap-4 items-center flex-[3]' : 'flex-[2]'}`}>
+                        <div className={`w-full flex flex-col items-center relative transition-all duration-500 ${isScrolled ? '!w-auto !items-start' : 'mb-2'}`}>
                             {isAdmin ? (
-                                <input value={mpSubTitle} onChange={(e) => setMpSubTitle(e.target.value.toUpperCase())} className="bg-transparent border-b border-primary/30 text-xs font-black text-primary uppercase tracking-[0.4em] text-center w-full max-w-sm mb-1" />
+                                <input value={mpSubTitle} onChange={(e) => setMpSubTitle(e.target.value.toUpperCase())} className={`bg-transparent border-b border-primary/30 text-xs font-black text-primary uppercase tracking-[0.4em] text-center w-full max-w-sm mb-1 ${isScrolled ? '!text-[10px] !mb-0 !text-left' : ''}`} />
                             ) : (
-                                <span className="text-xs font-black text-primary uppercase tracking-[0.4em] opacity-80">{mpSubTitle}</span>
+                                !isScrolled && <span className="text-xs font-black text-primary uppercase tracking-[0.4em] opacity-80">{mpSubTitle}</span>
                             )}
                             {isAdmin ? (
-                                <input value={mpTitle} onChange={(e) => setMpTitle(e.target.value.toUpperCase())} className="bg-transparent border-b border-white/20 text-4xl md:text-6xl font-black text-primary tracking-tighter uppercase leading-none mt-1 text-center w-full max-w-xl" />
+                                <input value={mpTitle} onChange={(e) => setMpTitle(e.target.value.toUpperCase())} className={`bg-transparent border-b border-white/20 font-black text-primary tracking-tighter uppercase leading-none mt-1 text-center w-full max-w-xl ${isScrolled ? 'text-xl !mt-0 !text-left' : 'text-4xl md:text-6xl'}`} />
                             ) : (
-                                <h1 className="text-4xl md:text-6xl font-black text-primary tracking-tighter uppercase leading-none mt-1">{mpTitle}</h1>
+                                <h1 className={`font-black tracking-tighter uppercase leading-none mt-1 transition-all duration-500 ${isScrolled ? 'text-2xl !mt-0' : 'text-4xl md:text-6xl'}`}>
+                                    <span className="text-white">MASTER</span> <span className="text-primary">PLAN</span>
+                                </h1>
                             )}
                         </div>
-                        <div className="flex flex-wrap justify-center gap-6 mt-4 text-[10px] font-bold border-t border-white/5 pt-4 w-full opacity-60 tracking-widest uppercase">
-                            <div className="flex items-center gap-2">PROJECT: <span className="text-white">{projectName}</span></div>
-                            <div className="flex items-center gap-2">CLIENT: <span className="text-white">{clientName}</span></div>
-                            <div className="flex items-center gap-2">DATE: <span className="text-white">{projectDate}</span></div>
-                        </div>
-                        <p className="text-gray-400 text-[11px] font-bold mt-4 uppercase tracking-widest opacity-80 max-w-xl leading-relaxed">{projectDesc}</p>
+                        {!isScrolled && (
+                            <div className="flex flex-wrap justify-center gap-6 mt-4 text-[10px] font-bold border-t border-white/5 pt-4 w-full opacity-60 tracking-widest uppercase">
+                                <div className="flex items-center gap-2">PROJECT: <span className="text-white">{projectName}</span></div>
+                                <div className="flex items-center gap-2">CLIENT: <span className="text-white">{clientName}</span></div>
+                                <div className="flex items-center gap-2">DATE: <span className="text-white">{projectDate}</span></div>
+                            </div>
+                        )}
+                        {!isScrolled && <p className="text-gray-400 text-[11px] font-bold mt-4 uppercase tracking-widest opacity-80 max-w-xl leading-relaxed">{projectDesc}</p>}
                     </div>
 
                     {/* Right side */}
-                    <div className="flex flex-wrap items-center justify-end gap-3 flex-1">
-                        <button onClick={toggleAdmin} className={`px-4 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all relative z-[110] active:scale-95 ${isAdmin ? 'border-red-500/50 bg-red-500/10 text-red-500' : 'border-white/10 bg-white/5 text-gray-400 hover:border-primary/50'}`}>
-                            {isAdmin ? "Admin Activo" : "Editor"}
+                    <div className={`flex flex-wrap items-center justify-end gap-3 flex-1 transition-all duration-500 ${isScrolled ? '!gap-2' : ''}`}>
+                        <button onClick={toggleAdmin} className={`px-4 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all relative z-[110] active:scale-95 ${isAdmin ? 'border-red-500/50 bg-red-500/10 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 shadow-[0_0_15px_rgba(250,204,21,0.1)]'} ${isScrolled ? '!px-3 !py-1.5 !text-[9px]' : ''}`}>
+                            {isAdmin ? (isScrolled ? <Lock size={12} /> : "MODO ADMIN") : (isScrolled ? <AlignJustify size={12} /> : "ACTIVAR EDITOR")}
                         </button>
                         {isAdmin && (
                             <button
@@ -620,7 +689,7 @@ export default function MasterPlan() {
                         )}
                         {isAdmin && (
                             <button
-                                onClick={saveToCloud}
+                                onClick={() => saveToCloud()}
                                 disabled={isCloudSyncing}
                                 className={`px-4 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2 ${isCloudSyncing ? 'bg-zinc-800 text-zinc-500 border-zinc-700' : 'border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'}`}
                             >
@@ -689,21 +758,27 @@ export default function MasterPlan() {
                         const visibleCols = isAdmin
                             ? ['item', 'equipo', 'descripcion', 'media', 'qty', 'costo', 'util', 'unitario', 'total', 'action']
                             : ['item', 'equipo', 'descripcion', 'media', 'qty', 'unitario', 'total'];
-                        const totalTableWidth = visibleCols.reduce((acc, col) => acc + (colWidths[col] || 0), 0);
+
+                        // Fallback widths to prevent layout collapse
+                        const initialColWidths = {
+                            item: 80, equipo: 400, descripcion: 600, media: 120, qty: 80,
+                            costo: 120, util: 80, unitario: 120, total: 150, action: 80
+                        };
+
+                        const totalTableWidth = visibleCols.reduce((acc, colId) => {
+                            return acc + (colWidths[colId] || initialColWidths[colId] || 100);
+                        }, 0);
 
                         return (
-                            <div key={s.id} className={`bg-zinc-950/40 border border-white/5 rounded-[2rem] backdrop-blur-md group/section transition-all duration-500 hover:ring-1 hover:ring-primary/40 ${!s.collapsed ? 'led-border-glow ring-1 ring-primary/20 scale-[1.01]' : 'hover:led-border-glow'}`}>
-                                {/* Integrated Sticky Header Host */}
-                                <div
-                                    className="sticky top-0 z-50 bg-black/95 shadow-[0_8px_32px_rgba(0,0,0,0.8)] border-b border-white/10 rounded-t-[2rem]"
-                                >
-                                    {/* Row 1: Module Title & Actions */}
-                                    <div className="p-6 flex items-center justify-between bg-white/[0.02]">
+                            <div key={s.id} className={`relative bg-zinc-950/40 border border-white/5 rounded-[2rem] group/section transition-all duration-500 hover:ring-1 hover:ring-primary/40 ${!s.collapsed ? 'led-border-glow-static ring-1 ring-primary/20 scale-[1.01]' : 'hover:led-border-glow-static'}`}>
+
+                                {/* 1. Module Title Bar - Sticky below main header */}
+                                <div className={`sticky z-[150] bg-black/95 border-b border-white/10 backdrop-blur-xl transition-all duration-300 ${s.collapsed ? 'rounded-[2rem]' : 'rounded-t-[2rem]'}`} style={{ top: isScrolled ? '76px' : '0px' }}>
+                                    <div className="min-h-[56px] h-auto py-3 px-6 flex items-center justify-between">
                                         <div className="flex items-center gap-4">
                                             <button
                                                 onClick={() => toggleSection(s.id)}
-                                                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 ${s.collapsed ? 'bg-zinc-900 text-gray-500 shadow-inner hover:led-button-glow hover:text-primary' : 'bg-primary text-black shadow-[0_0_20px_rgba(var(--primary-rgb),0.3)] led-button-glow'}`}
-                                                title={s.collapsed ? "ABRIR MÓDULO" : "CERRAR MÓDULO"}
+                                                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${s.collapsed ? 'bg-zinc-900 text-gray-500 shadow-inner hover:led-button-glow-static hover:text-primary' : 'bg-primary text-black shadow-[0_0_20px_rgba(var(--primary-rgb),0.3)] led-button-glow-static hover:scale-110 active:scale-95'}`}
                                             >
                                                 {s.collapsed ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
                                             </button>
@@ -715,12 +790,12 @@ export default function MasterPlan() {
                                                         className="bg-transparent border-b border-primary/20 text-xl font-black text-primary uppercase tracking-tight focus:outline-none focus:border-primary w-[500px]"
                                                     />
                                                 ) : (
-                                                    <h3 className="text-xl font-black text-primary uppercase tracking-tight">
+                                                    <h3 className="text-xl font-black text-white uppercase tracking-tight">
                                                         {(() => {
                                                             const parts = s.titulo.split(' ');
                                                             return (
                                                                 <>
-                                                                    <span className="text-white">{parts[0]}</span>
+                                                                    <span className="text-primary">{parts[0]}</span>
                                                                     {parts.length > 1 && ' ' + parts.slice(1).join(' ')}
                                                                 </>
                                                             );
@@ -729,30 +804,20 @@ export default function MasterPlan() {
                                                 )}
                                                 <div className="flex items-center gap-3 mt-1.5">
                                                     <span className="text-[9px] font-black bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded uppercase tracking-widest leading-none h-4 flex items-center">{s.tag}</span>
-                                                    {s.collapsed && s.summaryDesc && (
-                                                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider max-w-md truncate opacity-70">
-                                                            {s.summaryDesc}
-                                                        </span>
-                                                    )}
-                                                    {s.collapsed && !s.summaryDesc && (
-                                                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest flex items-center gap-1 opacity-40">
-                                                            <ChevronsRight size={10} className="animate-pulse" /> Módulo contraído
-                                                        </span>
-                                                    )}
                                                 </div>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-6">
-                                            {s.collapsed && (
-                                                <div className="flex flex-col items-end mr-2">
+                                            {s.collapsed && sectionTotals.find(x => x.sectionId === s.id) && (
+                                                <div className="flex flex-col items-end mr-2 shrink-0">
                                                     <span className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1 opacity-50">Subtotal Módulo</span>
-                                                    <span className="text-2xl font-black text-primary tracking-tighter drop-shadow-[0_0_10px_rgba(var(--primary-rgb),0.3)]">
-                                                        {money(sectionTotals.find(x => x.sectionId === s.id)?.totalVenta || 0)}
+                                                    <span className="text-2xl font-black text-primary tracking-tighter">
+                                                        {money(sectionTotals.find(x => x.sectionId === s.id).totalVenta)}
                                                     </span>
                                                 </div>
                                             )}
-                                            {isAdmin && (
-                                                <div className="flex gap-2 mr-4">
+                                            {isAdmin && !s.collapsed && (
+                                                <div className="flex gap-2">
                                                     <button
                                                         onClick={() => {
                                                             const inp = document.createElement('input');
@@ -761,235 +826,207 @@ export default function MasterPlan() {
                                                             inp.click();
                                                         }}
                                                         className="p-2 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-primary transition-colors"
-                                                        title="Sube imagen de portada del módulo"
                                                     >
                                                         {uploadingId === `module_${s.id}` ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}
                                                     </button>
+                                                    <button
+                                                        onClick={() => removeSection(s.id)}
+                                                        className="px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-red-500/20 transition-all"
+                                                    >
+                                                        Eliminar
+                                                    </button>
                                                 </div>
-                                            )}
-                                            {isAdmin && (
-                                                <button
-                                                    onClick={() => removeSection(s.id)}
-                                                    className="px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-red-500/20 transition-all"
-                                                >
-                                                    Eliminar Módulo
-                                                </button>
                                             )}
                                         </div>
                                     </div>
 
-                                    {/* Module Info Panel (Only when expanded) */}
-                                    {!s.collapsed && (
-                                        <div className="px-6 py-6 border-t border-white/5 bg-gradient-to-b from-white/[0.01] to-transparent flex gap-8">
-                                            {s.moduleImage && (
-                                                <div className="w-48 h-32 rounded-2xl overflow-hidden border border-white/10 shadow-2xl flex-shrink-0 group/modimg relative">
-                                                    <img src={s.moduleImage} className="w-full h-full object-cover grayscale group-hover/modimg:grayscale-0 transition-all duration-500" />
-                                                    {isAdmin && (
-                                                        <button
-                                                            onClick={() => updateSection(s.id, { moduleImage: null })}
-                                                            className="absolute top-2 right-2 p-1 bg-black/50 text-white rounded-full opacity-0 group-hover/modimg:opacity-100 transition-opacity"
-                                                        >
-                                                            <X size={12} />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            )}
-                                            <div className="flex-1 space-y-4">
-                                                {isAdmin ? (
-                                                    <textarea
-                                                        value={s.summaryDesc || ""}
-                                                        onChange={(e) => updateSection(s.id, { summaryDesc: e.target.value })}
-                                                        placeholder="Descripción breve del módulo..."
-                                                        className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-xs text-gray-400 font-medium outline-none focus:border-primary/30 h-32 resize-none"
-                                                    />
-                                                ) : (
-                                                    s.summaryDesc && <p className="text-xs text-gray-400 font-medium leading-relaxed max-w-2xl">{s.summaryDesc}</p>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Row 2: Industrial Labels (Yellow) - Independent Scrollable Header */}
+                                    {/* 2. Virtual Sticky Header (Yellow Bar) - Part of the sticky unit */}
                                     {!s.collapsed && (
                                         <div
-                                            className="overflow-hidden bg-primary text-black"
-                                            ref={el => headerRefs.current[s.id] = el}
+                                            ref={el => virtualHeaderRefs.current[s.id] = el}
+                                            className="overflow-hidden bg-primary border-t border-black/10"
                                         >
-                                            <div
-                                                className="flex text-[10px] font-black uppercase tracking-[0.2em] h-12"
-                                                style={{ width: totalTableWidth }}
-                                            >
-                                                <HeaderCell label="Item" width={colWidths.item} onResize={(e) => startResize('item', e)} locked={colsLocked} />
-                                                <HeaderCell label="Equipo" width={colWidths.equipo} onResize={(e) => startResize('equipo', e)} locked={colsLocked} />
-                                                <HeaderCell label="Descripción" width={colWidths.descripcion} onResize={(e) => startResize('descripcion', e)} locked={colsLocked} />
-                                                <HeaderCell label="FOTO / VIDEO" width={colWidths.media} onResize={(e) => startResize('media', e)} locked={colsLocked} align="center" />
-                                                <HeaderCell label="Qty" width={colWidths.qty} onResize={(e) => startResize('qty', e)} locked={colsLocked} />
-                                                {isAdmin && <HeaderCell label="Costo (USD)" width={colWidths.costo} onResize={(e) => startResize('costo', e)} locked={colsLocked} align="right" />}
-                                                {isAdmin && <HeaderCell label="Util %" width={colWidths.util} onResize={(e) => startResize('util', e)} locked={colsLocked} align="center" />}
-                                                <HeaderCell label="Unitario (USD)" width={colWidths.unitario} onResize={(e) => startResize('unitario', e)} locked={colsLocked} align="right" />
-                                                <HeaderCell label="Total (USD)" width={colWidths.total} onResize={(e) => startResize('total', e)} locked={colsLocked} align="right" />
-                                                {isAdmin && <HeaderCell label="Acc" width={colWidths.action} onResize={(e) => startResize('action', e)} locked={colsLocked} align="center" />}
+                                            <div style={{ width: totalTableWidth, minWidth: totalTableWidth }} className="flex h-10">
+                                                {visibleCols.map(colId => {
+                                                    const labels = {
+                                                        item: "Item", equipo: "Equipo", descripcion: "Descripción",
+                                                        media: "FOTO / VIDEO", qty: "Qty", costo: "Costo (USD)",
+                                                        util: "Util %", unitario: "Unitario (USD)", total: "Total (USD)", action: "Acc"
+                                                    };
+                                                    const aligns = { media: "center", costo: "right", util: "center", unitario: "right", total: "right", action: "center" };
+                                                    const w = colWidths[colId] || initialColWidths[colId] || 100;
+                                                    return (
+                                                        <div
+                                                            key={colId}
+                                                            style={{ width: w, minWidth: w }}
+                                                            className={`flex-shrink-0 px-4 flex items-center text-[10px] font-black uppercase tracking-[0.2em] text-black border-r border-black/10 relative group/cell ${aligns[colId] === "right" ? "justify-end text-right" : aligns[colId] === "center" ? "justify-center text-center" : "justify-start text-left"}`}
+                                                        >
+                                                            <span className="truncate">{labels[colId]}</span>
+                                                            {!colsLocked && (
+                                                                <div onMouseDown={(e) => startResize(colId, e)} className="absolute right-0 top-0 w-1 h-full cursor-col-resize hover:bg-black/20 z-10" />
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     )}
                                 </div>
 
-                                {/* Table Body Section */}
                                 {!s.collapsed && (
-                                    <div
-                                        className="overflow-x-auto custom-scrollbar"
-                                        style={{ width: "100%" }}
-                                        ref={el => tableRefs.current[s.id] = el}
-                                        onScroll={(e) => handleTableScroll(s.id, e)}
-                                    >
-                                        <table className="table-fixed border-collapse" style={{ width: totalTableWidth, minWidth: totalTableWidth }}>
-                                            {/* Ghost Header for Alignment Anchor */}
-                                            <colgroup>
-                                                <col style={{ width: colWidths.item }} />
-                                                <col style={{ width: colWidths.equipo }} />
-                                                <col style={{ width: colWidths.descripcion }} />
-                                                <col style={{ width: colWidths.media }} />
-                                                <col style={{ width: colWidths.qty }} />
-                                                {isAdmin && <col style={{ width: colWidths.costo }} />}
-                                                {isAdmin && <col style={{ width: colWidths.util }} />}
-                                                <col style={{ width: colWidths.unitario }} />
-                                                <col style={{ width: colWidths.total }} />
-                                                {isAdmin && <col style={{ width: colWidths.action }} />}
-                                            </colgroup>
-                                            <tbody style={{ fontSize: `${tableFontSize}px` }}>
-                                                {s.items.map(it => {
-                                                    const r = calcItem(it);
-                                                    return (
-                                                        <tr key={it.id} className={`border-b border-white/[0.02] hover:bg-white/[0.01] transition-colors ${!it.activo && 'opacity-30'}`}>
-                                                            <td className="p-4 border-r border-white/[0.02]">
-                                                                <div className="flex flex-col items-center gap-2">
-                                                                    <button
-                                                                        onClick={() => updateItem(s.id, it.id, { activo: !it.activo })}
-                                                                        className={`w-6 h-6 rounded-md border flex items-center justify-center transition-all ${it.activo ? 'bg-primary border-primary text-black' : 'bg-transparent border-white/20 text-white/10 hover:border-white/40'}`}
-                                                                    >
-                                                                        {it.activo && <Check size={14} strokeWidth={4} />}
-                                                                    </button>
-                                                                    {isAdmin ? (
-                                                                        <input value={it.codigo} onChange={(e) => updateItem(s.id, it.id, { codigo: e.target.value })} className="bg-transparent border-b border-white/5 text-[11px] font-mono text-gray-400 w-full text-center focus:border-primary/50 outline-none" />
-                                                                    ) : (
-                                                                        <span className="text-[11px] font-mono text-gray-400">{it.codigo}</span>
-                                                                    )}
-                                                                </div>
-                                                            </td>
-                                                            <td className="p-4 border-r border-white/[0.02]">
-                                                                {isAdmin ? (
-                                                                    <textarea
-                                                                        value={it.equipo}
-                                                                        onChange={(e) => updateItem(s.id, it.id, { equipo: e.target.value })}
-                                                                        className={`bg-transparent text-sm font-black text-white w-full border-b border-white/5 outline-none focus:border-primary/50 resize-none overflow-hidden ${!it.activo ? 'line-through text-white/40' : ''}`}
-                                                                        rows={1}
-                                                                        style={{ fieldSizing: "content" }}
-                                                                    />
-                                                                ) : (
-                                                                    <span className={`text-sm font-black text-white uppercase tracking-tight ${!it.activo ? 'line-through text-white/40' : ''}`}>{it.equipo}</span>
-                                                                )}
-                                                            </td>
-                                                            <td className="p-4 border-r border-white/[0.02]">
-                                                                {isAdmin ? (
-                                                                    <textarea
-                                                                        value={it.descripcion}
-                                                                        onChange={(e) => updateItem(s.id, it.id, { descripcion: e.target.value })}
-                                                                        className="bg-transparent text-[11px] text-gray-500 w-full resize-none border-none outline-none focus:text-gray-300"
-                                                                        rows={1}
-                                                                        style={{ fieldSizing: "content" }}
-                                                                    />
-                                                                ) : (
-                                                                    <p className="text-[11px] text-gray-500 font-medium leading-relaxed">{it.descripcion}</p>
-                                                                )}
-                                                            </td>
-                                                            <td className="p-4 border-r border-white/[0.02]">
-                                                                <div className="flex flex-col items-center justify-center gap-2 group/media relative">
-                                                                    {it.media_url ? (
-                                                                        <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-white/10 group-hover:border-primary/50 transition-all shadow-lg hover:scale-110 cursor-pointer" onClick={() => setSelectedMedia({ url: it.media_url, type: it.media_type })}>
-                                                                            {it.media_type === 'video' ? (
-                                                                                <video src={it.media_url} className="w-full h-full object-cover" />
-                                                                            ) : (
-                                                                                <img src={it.media_url} alt="" className="w-full h-full object-cover" />
-                                                                            )}
-                                                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/media:opacity-100 transition-opacity">
-                                                                                <Maximize2 size={14} className="text-white" />
+                                    <div className="flex flex-col">
+                                        {/* 2. Info Panel Details - Conditional */}
+                                        {(s.moduleImage || s.summaryDesc) && (
+                                            <div className="px-6 py-1 flex gap-8 border-b border-white/5 bg-gradient-to-b from-white/[0.01] to-transparent">
+                                                {s.moduleImage && (
+                                                    <div className="w-64 h-40 rounded-2xl overflow-hidden border border-white/10 shadow-2xl flex-shrink-0 group/modimg relative">
+                                                        <img src={s.moduleImage} className="w-full h-full object-cover grayscale group-hover/modimg:grayscale-0 transition-all duration-500" />
+                                                        {isAdmin && (
+                                                            <button onClick={() => updateSection(s.id, { moduleImage: null })} className="absolute top-2 right-2 p-1 bg-black/50 text-white rounded-full opacity-0 group-hover/modimg:opacity-100 transition-opacity"><X size={12} /></button>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                <div className="flex-1 space-y-4">
+                                                    {isAdmin ? (
+                                                        <textarea
+                                                            value={s.summaryDesc || ""}
+                                                            onChange={(e) => updateSection(s.id, { summaryDesc: e.target.value })}
+                                                            placeholder="Descripción breve..."
+                                                            className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-xs text-gray-400 font-medium outline-none focus:border-primary/30 h-32 resize-none"
+                                                        />
+                                                    ) : (
+                                                        s.summaryDesc && <p className="text-xs text-gray-400 font-medium leading-relaxed max-w-2xl">{s.summaryDesc}</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* 3. Table Data - Horizontal Scroll Sync */}
+                                        <div
+                                            ref={el => tableContainerRefs.current[s.id] = el}
+                                            onScroll={(e) => syncScroll(s.id, e)}
+                                            className="overflow-x-auto custom-scrollbar overflow-y-visible"
+                                        >
+                                            <table className="table-fixed border-collapse" style={{ width: totalTableWidth, minWidth: totalTableWidth }}>
+                                                <colgroup>
+                                                    {visibleCols.map(colId => (
+                                                        <col key={colId} style={{ width: colWidths[colId] || initialColWidths[colId] || 100 }} />
+                                                    ))}
+                                                </colgroup>
+                                                <thead className="invisible h-0">
+                                                    <tr className="h-0">
+                                                        {visibleCols.map(colId => {
+                                                            const labels = {
+                                                                item: "Item", equipo: "Equipo", descripcion: "Descripción",
+                                                                media: "FOTO / VIDEO", qty: "Qty", costo: "Costo (USD)",
+                                                                util: "Util %", unitario: "Unitario (USD)", total: "Total (USD)", action: "Acc"
+                                                            };
+                                                            const aligns = { media: "center", costo: "right", util: "center", unitario: "right", total: "right", action: "center" };
+                                                            const w = colWidths[colId] || initialColWidths[colId] || 100;
+                                                            return (
+                                                                <th
+                                                                    key={colId}
+                                                                    style={{ width: w, minWidth: w, top: isScrolled ? '132px' : '56px' }}
+                                                                    className={`sticky z-[140] bg-primary px-4 text-[10px] font-black uppercase tracking-[0.2em] border-r border-black/5 relative group/cell transition-all duration-300 ${aligns[colId] === "right" ? "text-right" : aligns[colId] === "center" ? "text-center" : "text-left"}`}
+                                                                >
+                                                                    <div className="flex items-center h-full w-full">
+                                                                        <span className="truncate block" title={labels[colId]}>{labels[colId]}</span>
+                                                                    </div>
+                                                                </th>
+                                                            );
+                                                        })}
+                                                    </tr>
+                                                </thead>
+                                                <tbody style={{ fontSize: `${tableFontSize}px` }}>
+                                                    {/* Spacer Row is no longer needed with zero-gap sticky logic */}
+                                                    {s.items.map(it => {
+                                                        const r = calcItem(it);
+                                                        return (
+                                                            <tr key={it.id} className={`border-b border-white/[0.02] hover:bg-white/[0.01] transition-colors ${!it.activo && 'opacity-30'}`}>
+                                                                {visibleCols.map(colId => {
+                                                                    const w = colWidths[colId] || initialColWidths[colId] || 100;
+                                                                    const cellStyle = { width: w, minWidth: w };
+                                                                    if (colId === 'item') return (
+                                                                        <td key={colId} style={cellStyle} className="p-4 border-r border-white/[0.02]">
+                                                                            <div className="flex flex-col items-center gap-2">
+                                                                                <button onClick={() => updateItem(s.id, it.id, { activo: !it.activo })} className={`w-6 h-6 rounded-md border flex items-center justify-center transition-all ${it.activo ? 'bg-primary border-primary text-black' : 'bg-transparent border-white/20 text-white/10 hover:border-white/40'}`}>
+                                                                                    {it.activo && <Check size={14} strokeWidth={4} />}
+                                                                                </button>
+                                                                                {isAdmin ? <input value={it.codigo} onChange={(e) => updateItem(s.id, it.id, { codigo: e.target.value })} className="bg-transparent border-b border-white/5 text-[11px] font-mono text-gray-400 w-full text-center focus:border-primary/50 outline-none" /> : <span className="text-[11px] font-mono text-gray-400">{it.codigo}</span>}
                                                                             </div>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <div className="flex items-center justify-center">
-                                                                            {isAdmin ? (
-                                                                                <div className="flex gap-1">
-                                                                                    <label className="p-2 rounded-lg bg-white/5 border border-white/10 text-gray-500 hover:text-primary hover:border-primary/50 cursor-pointer transition-all">
-                                                                                        {uploadingId === it.id ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
-                                                                                        <input type="file" className="hidden" accept="image/*" onChange={(e) => handleItemMediaUpload(s.id, it.id, e.target.files[0])} disabled={uploadingId === it.id} />
-                                                                                    </label>
-                                                                                    <label className="p-2 rounded-lg bg-white/5 border border-white/10 text-gray-500 hover:text-primary hover:border-primary/50 cursor-pointer transition-all">
-                                                                                        {uploadingId === it.id ? <Loader2 size={14} className="animate-spin" /> : <Video size={14} />}
-                                                                                        <input type="file" className="hidden" accept="video/*" onChange={(e) => handleItemMediaUpload(s.id, it.id, e.target.files[0])} disabled={uploadingId === it.id} />
-                                                                                    </label>
-                                                                                </div>
-                                                                            ) : (
-                                                                                <Camera size={16} className="text-white/5" />
-                                                                            )}
-                                                                        </div>
-                                                                    )}
-                                                                    {isAdmin && it.media_url && (
-                                                                        <button
-                                                                            onClick={() => updateItem(s.id, it.id, { media_url: null, media_type: null })}
-                                                                            className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover/media:opacity-100 transition-opacity scale-75 hover:scale-100"
-                                                                        >
-                                                                            <X size={10} />
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                            </td>
-                                                            <td className="p-4 border-r border-white/[0.02]">
-                                                                {isAdmin ? (
-                                                                    <input type="number" value={it.qty} onChange={(e) => updateItem(s.id, it.id, { qty: n(e.target.value) })} className="bg-white/5 border border-white/10 rounded px-2 py-1 text-xs font-mono text-white w-full focus:border-primary/50 outline-none" />
-                                                                ) : (
-                                                                    <span className="text-xs font-mono text-gray-300">{it.qty}</span>
-                                                                )}
-                                                            </td>
-                                                            {isAdmin && (
-                                                                <td className="p-4 text-right border-r border-white/[0.02]">
-                                                                    <input type="number" value={it.costoUSD} onChange={(e) => updateItem(s.id, it.id, { costoUSD: n(e.target.value) })} className="bg-white/5 border border-white/10 rounded px-2 py-1 text-xs font-mono text-white w-full text-right focus:border-primary/50 outline-none" />
-                                                                </td>
-                                                            )}
-                                                            {isAdmin && (
-                                                                <td className="p-4 text-center border-r border-white/[0.02]">
-                                                                    <input type="number" value={it.utilidad} onChange={(e) => updateItem(s.id, it.id, { utilidad: n(e.target.value) })} className="bg-primary/5 border border-primary/20 rounded px-2 py-1 text-xs font-mono text-primary w-full text-center focus:border-primary/50 outline-none" />
-                                                                </td>
-                                                            )}
-                                                            <td className={`px-4 text-right text-xs font-mono border-r border-white/5 ${!it.activo ? 'line-through text-gray-600' : 'text-gray-400'}`}>
-                                                                {money(r.ventaUnitFinal)}
-                                                            </td>
-                                                            <td className={`px-4 text-right text-sm font-black tracking-tight border-r border-white/5 ${!it.activo ? 'line-through text-primary/30' : 'text-primary'}`}>
-                                                                {money(r.totalVenta)}
-                                                            </td>
-                                                            {isAdmin && (
-                                                                <td className="px-4 text-center border-r border-white/5">
-                                                                    <button onClick={() => removeItem(s.id, it.id)} className="text-red-500 opacity-20 hover:opacity-100 transition-opacity"><X size={14} /></button>
-                                                                </td>
-                                                            )}
-                                                        </tr>
-                                                    );
-                                                })}
-                                                {isAdmin && <tr><td colSpan={isAdmin ? 10 : 7} className="p-4"><button onClick={() => addItem(s.id)} className="w-full py-3 border border-dashed border-white/10 rounded-xl text-gray-500 hover:text-primary hover:border-primary transition-all text-xs font-bold uppercase tracking-widest">+ Agregar Fila al Módulo</button></td></tr>}
-                                            </tbody>
-                                            <tfoot>
-                                                <tr className="bg-white/[0.02] font-black border-t border-white/5">
-                                                    <td colSpan={isAdmin ? 8 : 6} className="p-4 text-right text-[10px] text-gray-500 uppercase tracking-[0.2em]">Subtotal Módulo</td>
-                                                    <td className="p-4 text-right text-lg text-primary tracking-tighter">{money(sectionTotals.find(x => x.sectionId === s.id)?.totalVenta || 0)}</td>
-                                                    {isAdmin && <td className="p-4 border-l border-white/[0.02]"></td>}
-                                                </tr>
-                                            </tfoot>
-                                        </table>
+                                                                        </td>
+                                                                    );
+                                                                    if (colId === 'equipo') return (
+                                                                        <td key={colId} style={cellStyle} className="p-4 border-r border-white/[0.02]">
+                                                                            {isAdmin ? <textarea value={it.equipo} onChange={(e) => updateItem(s.id, it.id, { equipo: e.target.value })} className="bg-transparent text-sm font-black text-white w-full border-b border-white/5 outline-none focus:border-primary/50 resize-none overflow-hidden" rows={1} style={{ fieldSizing: "content" }} /> : <span className={`text-sm font-black text-white uppercase tracking-tight ${!it.activo ? 'line-through text-white/40' : ''}`}>{it.equipo}</span>}
+                                                                        </td>
+                                                                    );
+                                                                    if (colId === 'descripcion') return (
+                                                                        <td key={colId} style={cellStyle} className="p-4 border-r border-white/[0.02]">
+                                                                            {isAdmin ? <textarea value={it.descripcion} onChange={(e) => updateItem(s.id, it.id, { descripcion: e.target.value })} className="bg-transparent text-[11px] text-gray-500 w-full resize-none border-none outline-none focus:text-gray-300" rows={1} style={{ fieldSizing: "content" }} /> : <p className="text-[11px] text-gray-500 font-medium leading-relaxed">{it.descripcion}</p>}
+                                                                        </td>
+                                                                    );
+                                                                    if (colId === 'media') return (
+                                                                        <td key={colId} style={cellStyle} className="p-4 border-r border-white/[0.02]">
+                                                                            <div className="flex flex-col items-center justify-center gap-2 group/media relative">
+                                                                                {it.media_url ? (
+                                                                                    <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-white/10 group-hover:border-primary/50 transition-all shadow-lg hover:scale-110 cursor-pointer" onClick={() => setSelectedMedia({ url: it.media_url, type: it.media_type })}>
+                                                                                        {it.media_type === 'video' ? <video src={it.media_url} className="w-full h-full object-cover" /> : <img src={it.media_url} alt="" className="w-full h-full object-cover" />}
+                                                                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/media:opacity-100 transition-opacity"><Maximize2 size={14} className="text-white" /></div>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="flex items-center justify-center">{isAdmin ? <div className="flex gap-1"><label className="p-2 rounded-lg bg-white/5 border border-white/10 text-gray-500 hover:text-primary hover:border-primary/50 cursor-pointer transition-all">{uploadingId === it.id ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}<input type="file" className="hidden" accept="image/*" onChange={(e) => handleItemMediaUpload(s.id, it.id, e.target.files[0])} /></label><label className="p-2 rounded-lg bg-white/5 border border-white/10 text-gray-500 hover:text-primary hover:border-primary/50 cursor-pointer transition-all">{uploadingId === it.id ? <Loader2 size={14} className="animate-spin" /> : <Video size={14} />}<input type="file" className="hidden" accept="video/*" onChange={(e) => handleItemMediaUpload(s.id, it.id, e.target.files[0])} /></label></div> : <Camera size={16} className="text-white/5" />}</div>
+                                                                                )}
+                                                                                {isAdmin && it.media_url && <button onClick={() => updateItem(s.id, it.id, { media_url: null, media_type: null })} className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover/media:opacity-100 transition-opacity scale-75 hover:scale-100"><X size={10} /></button>}
+                                                                            </div>
+                                                                        </td>
+                                                                    );
+                                                                    if (colId === 'qty') return (
+                                                                        <td key={colId} style={cellStyle} className="p-4 border-r border-white/[0.02]">
+                                                                            {isAdmin ? <input type="number" value={it.qty} onChange={(e) => updateItem(s.id, it.id, { qty: n(e.target.value) })} className="bg-white/5 border border-white/10 rounded px-2 py-1 text-xs font-mono text-white w-full focus:border-primary/50 outline-none" /> : <span className="text-xs font-mono text-gray-300">{it.qty}</span>}
+                                                                        </td>
+                                                                    );
+                                                                    if (colId === 'costo' && isAdmin) return (
+                                                                        <td key={colId} style={cellStyle} className="p-4 text-right border-r border-white/[0.02]">
+                                                                            <input type="number" value={it.costoUSD} onChange={(e) => updateItem(s.id, it.id, { costoUSD: n(e.target.value) })} className="bg-white/5 border border-white/10 rounded px-2 py-1 text-xs font-mono text-white w-full text-right focus:border-primary/50 outline-none" />
+                                                                        </td>
+                                                                    );
+                                                                    if (colId === 'util' && isAdmin) return (
+                                                                        <td key={colId} style={cellStyle} className="p-4 text-center border-r border-white/[0.02]">
+                                                                            <input type="number" value={it.utilidad} onChange={(e) => updateItem(s.id, it.id, { utilidad: n(e.target.value) })} className="bg-primary/5 border border-primary/20 rounded px-2 py-1 text-xs font-mono text-primary w-full text-center focus:border-primary/50 outline-none" />
+                                                                        </td>
+                                                                    );
+                                                                    if (colId === 'unitario') return (
+                                                                        <td key={colId} style={cellStyle} className={`p-4 text-right text-xs font-mono border-r border-white/[0.02] ${!it.activo ? 'line-through text-gray-600' : 'text-gray-400'}`}>{money(r.ventaUnitFinal)}</td>
+                                                                    );
+                                                                    if (colId === 'total') return (
+                                                                        <td key={colId} style={cellStyle} className={`p-4 text-right text-sm font-black tracking-tight border-r border-white/[0.02] ${!it.activo ? 'line-through text-primary/30' : 'text-primary'}`}>{money(r.totalVenta)}</td>
+                                                                    );
+                                                                    if (colId === 'action' && isAdmin) return (
+                                                                        <td key={colId} style={cellStyle} className="p-4 text-center border-l border-white/[0.02]"><button onClick={() => removeItem(s.id, it.id)} className="text-red-500 opacity-20 hover:opacity-100 transition-opacity"><X size={14} /></button></td>
+                                                                    );
+                                                                    return null;
+                                                                })}
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                    {isAdmin && <tr><td colSpan={visibleCols.length} className="p-4"><button onClick={() => addItem(s.id)} className="w-full py-3 border border-dashed border-white/10 rounded-xl text-gray-500 hover:text-primary hover:border-primary transition-all text-xs font-bold uppercase tracking-widest">+ Agregar Fila</button></td></tr>}
+                                                </tbody>
+                                                <tfoot>
+                                                    <tr className="bg-white/[0.05] font-black border-t border-white/5">
+                                                        <td colSpan={visibleCols.length - 1} className="p-6 text-right text-[10px] text-gray-500 uppercase tracking-[0.2em]">Subtotal Módulo</td>
+                                                        <td className="p-6 text-right text-xl text-primary tracking-tighter border-l border-white/5">{money(sectionTotals.find(x => x.sectionId === s.id)?.totalVenta || 0)}</td>
+                                                    </tr>
+                                                </tfoot>
+                                            </table>
+                                        </div>
                                     </div>
                                 )}
                             </div>
                         );
                     })}
                 </div>
+
 
                 {/* Footer Sumary */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-20 p-8 bg-zinc-950/40 border border-white/5 rounded-[2.5rem] backdrop-blur-xl">

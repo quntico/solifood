@@ -234,8 +234,18 @@
   animation: led-glow 2s infinite ease-in-out;
 }
 
+.led-border-glow-static {
+  box-shadow: 0 0 20px rgba(255, 214, 10, 0.6), inset 0 0 10px rgba(255, 214, 10, 0.3);
+  border-color: rgba(255, 214, 10, 0.8) !important;
+}
+
 .led-button-glow {
   animation: led-glow 1.5s infinite ease-in-out;
+}
+
+.led-button-glow-static {
+  box-shadow: 0 0 15px rgba(255, 214, 10, 0.5);
+  border-color: rgba(255, 214, 10, 0.6) !important;
 }
 
 /* Print Styles */
