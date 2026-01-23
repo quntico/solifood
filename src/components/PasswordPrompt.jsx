@@ -35,20 +35,20 @@ const PasswordPrompt = ({ onCorrectPassword, onCancel }) => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm"
+      className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] backdrop-blur-sm"
     >
       <motion.div
-        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
-        className="bg-gray-950 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md p-6 overflow-hidden"
+        className="bg-zinc-950/40 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5),inset_0_1px_0_0_rgba(255,255,255,0.1)] backdrop-blur-xl w-full max-w-sm p-8 overflow-hidden ring-1 ring-white/5"
       >
-        <div className="flex flex-col items-center text-center mb-6">
-          <div className="p-3 bg-primary/10 rounded-full mb-4 border border-primary/20 shadow-[0_0_15px_hsl(var(--primary)/0.2)]">
-            <Shield className="w-8 h-8 text-primary" />
+        <div className="flex flex-col items-center text-center mb-8">
+          <div className="p-4 bg-primary/10 rounded-2xl mb-5 border border-primary/20 shadow-[0_0_20px_hsl(var(--primary)/0.15)] ring-1 ring-primary/30">
+            <Shield className="w-10 h-10 text-primary" />
           </div>
-          <h2 className="text-xl font-bold tracking-tight text-primary">Acceso de Administrador</h2>
-          <p className="text-sm text-gray-400 mt-2">
-            Ingrese sus credenciales para acceder al panel de control.
+          <h2 className="text-2xl font-black tracking-tight text-white uppercase italic">Acceso de Administrador</h2>
+          <p className="text-xs text-gray-400 mt-2 font-medium tracking-wide">
+            INGRESA LAS CREDENCIALES DE CONTROL
           </p>
         </div>
 
@@ -56,20 +56,20 @@ const PasswordPrompt = ({ onCorrectPassword, onCancel }) => {
           <div className="space-y-2">
             <Input
               type="password"
-              placeholder="Contraseña"
+              placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className={`text-center bg-gray-900 border-gray-700 text-white placeholder:text-gray-500 focus:border-primary focus:ring-primary ${error ? 'border-destructive ring-1 ring-destructive' : ''}`}
+              className={`text-center h-12 bg-white/5 border-white/10 text-white placeholder:text-gray-600 focus:border-primary/50 focus:ring-primary/20 rounded-xl font-mono tracking-widest ${error ? 'border-destructive ring-1 ring-destructive' : ''}`}
               autoFocus
             />
           </div>
 
-          <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={onCancel} className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white">
-              Cancelar
+          <div className="flex flex-col gap-3">
+            <Button type="submit" className="w-full h-12 bg-primary hover:bg-primary/90 text-white font-bold rounded-xl shadow-[0_10px_20px_hsl(var(--primary)/0.3)] transition-all hover:scale-[1.02] active:scale-[0.98]">
+              ACCEDER AL PANEL
             </Button>
-            <Button type="submit" className="bg-primary hover:bg-primary/90 text-white shadow-[0_0_15px_hsl(var(--primary)/0.4)]">
-              Acceder
+            <Button type="button" variant="ghost" onClick={onCancel} className="w-full h-10 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl text-xs font-bold tracking-widest">
+              CANCELAR
             </Button>
           </div>
         </form>
