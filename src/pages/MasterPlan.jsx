@@ -7,7 +7,7 @@ import ExportTemplateEditor from '../components/ExportTemplateEditor';
 import { supabase } from "@/lib/customSupabaseClient";
 import PasswordPrompt from '@/components/PasswordPrompt';
 import { getActiveBucket } from "@/lib/bucketResolver";
-import { Camera, Video, Image as ImageIcon, X, Check, Maximize2, Upload, Loader2, Play, Lock, Unlock, Settings, AlignLeft, AlignCenter, AlignRight, AlignJustify, Calendar, User, Briefcase, ChevronRight, ChevronDown, ChevronsDown, ChevronsRight, FileSpreadsheet, Download, Plus, Minus } from "lucide-react";
+import { Camera, Video, Image as ImageIcon, X, Check, Maximize2, Upload, Loader2, Play, Lock, Unlock, Settings, Edit, Shield, AlignLeft, AlignCenter, AlignRight, AlignJustify, Calendar, User, Briefcase, ChevronRight, ChevronDown, ChevronsDown, ChevronsRight, FileSpreadsheet, Download, Plus, Minus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Dialog,
@@ -1067,7 +1067,7 @@ export default function MasterPlan() {
                                 <input type="file" ref={logoRef} className="hidden" accept="image/*" onChange={(e) => handleLogoUpload(e.target.files[0])} />
                             </div>
                             {!isScrolled && (
-                                <span className="text-[10px] font-black text-white bg-primary/10 px-2 py-0.5 rounded border border-primary/20 inline-block">VER 4.30</span>
+                                <span className="text-[10px] font-black text-white bg-primary/10 px-2 py-0.5 rounded border border-primary/20 inline-block">VER 4.31</span>
                             )}
                         </div>
                     </div>
