@@ -594,28 +594,31 @@ export default function MasterPlan() {
 
             const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filePath);
 
-            let updatedSections = [];
+            // CALCULAMOS EL NUEVO ESTADO PRIMERO (Seguridad total v4.37)
             setSections(prev => {
-                updatedSections = prev.map(s => s.id === sectionId ? {
+                const nextSections = prev.map(s => s.id === sectionId ? {
                     ...s,
                     items: s.items.map(it => it.id === itemId ? { ...it, media_url: publicUrl, media_type: mediaType } : it)
                 } : s);
-                return updatedSections;
-            });
 
-            // Persistir inmediatamente después de actualizar el estado local
-            const updatedConfig = {
-                clientName, projectName, projectDesc, projectDate,
-                mpTitle, mpSubTitle, logoUrl, heroVideoUrl,
-                heroVideoIsIntegrated, heroVideoScale, heroVideoBorderRadius,
-                tableFontSize, sections: updatedSections
-            };
-            await saveToCloud(updatedConfig);
+                // Disparamos el guardado con la configuración RECIÉN CALCULADA
+                const updatedConfig = {
+                    clientName, projectName, projectDesc, projectDate,
+                    mpTitle, mpSubTitle, logoUrl, heroVideoUrl,
+                    heroVideoIsIntegrated, heroVideoScale, heroVideoBorderRadius,
+                    tableFontSize, sections: nextSections
+                };
+
+                // Sincronización en segundo plano con los datos correctos
+                saveToCloud(updatedConfig);
+
+                return nextSections;
+            });
 
             toast({ title: "Media actualizado", description: "El archivo se ha subido y guardado correctamente." });
         } catch (error) {
             console.error(error);
-            toast({ title: "Error", description: "No se pudo subir el archivo.", variant: "destructive" });
+            toast({ title: "Error", description: "No se pudo subir o guardar el archivo.", variant: "destructive" });
         } finally { setUploadingId(null); }
     };
 
@@ -1091,7 +1094,7 @@ export default function MasterPlan() {
                                 <input type="file" ref={logoRef} className="hidden" accept="image/*" onChange={(e) => handleLogoUpload(e.target.files[0])} />
                             </div>
                             {!isScrolled && (
-                                <span className="text-[10px] font-black text-white bg-primary/10 px-2 py-0.5 rounded border border-primary/20 inline-block uppercase tracking-wider">VER 4.36</span>
+                                <span className="text-[10px] font-black text-white bg-primary/10 px-2 py-0.5 rounded border border-primary/20 inline-block uppercase tracking-wider">VER 4.37</span>
                             )}
                         </div>
                     </div>
