@@ -5,6 +5,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import ExportTemplateEditor from '../components/ExportTemplateEditor';
 import { supabase } from "@/lib/customSupabaseClient";
+import PasswordPrompt from '@/components/PasswordPrompt';
 import { getActiveBucket } from "@/lib/bucketResolver";
 import { Camera, Video, Image as ImageIcon, X, Check, Maximize2, Upload, Loader2, Play, Lock, Unlock, Settings, AlignLeft, AlignCenter, AlignRight, AlignJustify, Calendar, User, Briefcase, ChevronRight, ChevronDown, ChevronsDown, ChevronsRight, FileSpreadsheet, Download, Plus, Minus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -155,6 +156,8 @@ export default function MasterPlan() {
     const [tipoCambio, setTipoCambio] = useState(18.5);
     const [ivaPct, setIvaPct] = useState(16);
     const [isAdmin, setIsAdmin] = useState(false);
+    const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+    const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
     const [isScrolled, setIsScrolled] = useState(false);
     const tableContainerRefs = useRef({});
     const virtualHeaderRefs = useRef({});
@@ -505,7 +508,11 @@ export default function MasterPlan() {
     };
 
     const toggleAdmin = () => {
-        setIsAdmin(!isAdmin);
+        if (!isAdminAuthenticated) {
+            setShowPasswordPrompt(true);
+        } else {
+            setIsAdmin(!isAdmin);
+        }
     };
 
     const handleLogoUpload = async (file) => {
@@ -1060,7 +1067,7 @@ export default function MasterPlan() {
                                 <input type="file" ref={logoRef} className="hidden" accept="image/*" onChange={(e) => handleLogoUpload(e.target.files[0])} />
                             </div>
                             {!isScrolled && (
-                                <span className="text-[10px] font-black text-white bg-primary/10 px-2 py-0.5 rounded border border-primary/20 inline-block">VER 4.18</span>
+                                <span className="text-[10px] font-black text-white bg-primary/10 px-2 py-0.5 rounded border border-primary/20 inline-block">VER 4.26</span>
                             )}
                         </div>
                     </div>
@@ -1112,7 +1119,7 @@ export default function MasterPlan() {
                     {/* Right side */}
                     <div className={`flex flex-wrap items-center justify-end gap-3 flex-1 transition-all duration-500 ${isScrolled ? '!gap-2' : ''}`}>
                         <button onClick={toggleAdmin} className={`px-4 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all relative z-[110] active:scale-95 ${isAdmin ? 'border-red-500/50 bg-red-500/10 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 shadow-[0_0_15px_rgba(250,204,21,0.1)]'} ${isScrolled ? '!px-3 !py-1.5 !text-[9px]' : ''}`}>
-                            {isAdmin ? (isScrolled ? <Lock size={12} /> : "MODO ADMIN") : (isScrolled ? <AlignJustify size={12} /> : "ACTIVAR EDITOR")}
+                            {isAdminAuthenticated ? (isAdmin ? (isScrolled ? <Lock size={12} /> : "DESACTIVAR EDITOR") : (isScrolled ? <Edit size={12} /> : "ACTIVAR EDITOR")) : (isScrolled ? <Shield size={12} /> : "ACTIVAR EDITOR")}
                         </button>
 
                         {isAdmin && (
@@ -1784,6 +1791,17 @@ export default function MasterPlan() {
                 onSave={handleSavePdfSettings}
                 logoUrl={logoUrl}
             />
+
+            {showPasswordPrompt && (
+                <PasswordPrompt
+                    onCorrectPassword={(pw) => {
+                        setIsAdminAuthenticated(true);
+                        setIsAdmin(true);
+                        setShowPasswordPrompt(false);
+                    }}
+                    onCancel={() => setShowPasswordPrompt(false)}
+                />
+            )}
         </div >
     );
 }

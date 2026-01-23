@@ -220,7 +220,7 @@ const Sidebar = ({
               {!isCollapsed && (
                 <div className="px-6 py-4 mt-auto">
                   <div className="text-[10px] font-mono text-white tracking-widest opacity-60">
-                    VER 4.25
+                    VER 4.26
                   </div>
                 </div>
               )}
