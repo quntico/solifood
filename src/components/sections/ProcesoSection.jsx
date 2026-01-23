@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { motion, useScroll, useSpring } from 'framer-motion';
-import { Layers, Edit, Settings } from 'lucide-react';
+import { motion, useScroll, useSpring, AnimatePresence } from 'framer-motion';
+import { Layers, Edit, Settings, FileText, Image as ImageIcon } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import SectionHeader from '@/components/SectionHeader';
 import { iconMap } from '@/lib/iconMap';
@@ -63,6 +63,7 @@ const ProcesoSection = ({ sectionData, isEditorMode, onContentChange }) => {
   const steps = content.steps || defaultContent.steps;
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [mobileModes, setMobileModes] = useState({}); // { [stepId]: 'info' | 'image' }
   const timelineRef = useRef(null);
   const { scrollYProgress } = useScroll({
     target: timelineRef,
@@ -165,19 +166,55 @@ const ProcesoSection = ({ sectionData, isEditorMode, onContentChange }) => {
                   </div>
 
                   {/* Right Column (Desktop) / Main Column (Mobile) */}
-                  <div className="sm:block">
-                    {!isLeft ? (
-                      <motion.div
-                        initial={{ x: 50, opacity: 0 }}
-                        whileInView={{ x: 0, opacity: 1 }}
-                        viewport={{ once: true, amount: 0.5 }}
-                        transition={{ duration: 0.6 }}
-                        className="bg-gray-900/50 p-6 rounded-xl border border-primary/40 backdrop-blur-sm shadow-[0_0_15px_hsl(var(--primary)/0.15)] hover:border-primary transition-all duration-300 hover:shadow-[0_0_30px_hsl(var(--primary)/0.3)] h-full flex flex-col justify-center"
-                      >
-                        <TimelineCardContent step={step} isLeft={isLeft} />
-                      </motion.div>
-                    ) : (
-                      <div className="hidden sm:block">
+                  <div className="sm:block min-h-[14rem] flex flex-col">
+                    <AnimatePresence mode="wait">
+                      {/* Mobile Toggle Control */}
+                      <div className="sm:hidden flex bg-gray-900/80 p-1 rounded-lg mb-4 border border-primary/20">
+                        <button
+                          onClick={() => setMobileModes(prev => ({ ...prev, [step.id]: 'info' }))}
+                          className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-bold transition-all ${(!mobileModes[step.id] || mobileModes[step.id] === 'info') ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                        >
+                          <FileText size={14} /> FICHA TÉCNICA
+                        </button>
+                        <button
+                          onClick={() => setMobileModes(prev => ({ ...prev, [step.id]: 'image' }))}
+                          className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-bold transition-all ${(mobileModes[step.id] === 'image') ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                        >
+                          <ImageIcon size={14} /> IMAGEN
+                        </button>
+                      </div>
+
+                      {(!isLeft || (typeof window !== 'undefined' && window.innerWidth < 640)) && (
+                        <motion.div
+                          key={`${step.id}-${mobileModes[step.id] === 'image' ? 'image' : 'info'}`}
+                          initial={{ opacity: 0, x: 20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -20 }}
+                          className="flex-1"
+                        >
+                          {/* Contenido Principal: O TEXTO O IMAGEN en Móvil */}
+                          {(!mobileModes[step.id] || mobileModes[step.id] === 'info') ? (
+                            <div className={`bg-gray-900/50 p-6 rounded-xl border border-primary/40 backdrop-blur-sm shadow-[0_0_15px_hsl(var(--primary)/0.15)] hover:border-primary transition-all duration-300 hover:shadow-[0_0_30px_hsl(var(--primary)/0.3)] h-full flex flex-col justify-center ${!isLeft ? '' : 'sm:hidden'}`}>
+                              <TimelineCardContent step={step} isLeft={isLeft} />
+                            </div>
+                          ) : (
+                            step.image_url && (
+                              <div className="w-full h-64 rounded-xl overflow-hidden border border-primary/20 bg-black/40 shadow-xl">
+                                <img
+                                  src={step.image_url}
+                                  alt={step.title}
+                                  className="w-full h-full object-contain"
+                                />
+                              </div>
+                            )
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Desktop Side Image (shown only when not current column for text) */}
+                    {isLeft && (
+                      <div className="hidden sm:block h-full">
                         {step.image_url && (
                           <motion.div
                             initial={{ opacity: 0.4 }}
@@ -193,19 +230,6 @@ const ProcesoSection = ({ sectionData, isEditorMode, onContentChange }) => {
                         )}
                       </div>
                     )}
-
-                    {/* Mobile Image (shown below card for better visibility) */}
-                    <div className="sm:hidden mt-4">
-                      {step.image_url && (
-                        <div className="w-full h-40 rounded-xl overflow-hidden border border-primary/20 bg-black/40 shadow-xl">
-                          <img
-                            src={step.image_url}
-                            alt={step.title}
-                            className="w-full h-full object-contain"
-                          />
-                        </div>
-                      )}
-                    </div>
                   </div>
 
 
