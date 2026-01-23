@@ -40,8 +40,15 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
 // --- Helper Functions ---
+const cleanNum = (val) => {
+  if (typeof val === 'number') return val;
+  if (!val) return 0;
+  // Remove commas used as thousands separators before parsing
+  return parseFloat(String(val).replace(/,/g, '')) || 0;
+};
+
 const formatCurrency = (value, currency = 'USD') => {
-  const num = parseFloat(value) || 0;
+  const num = cleanNum(value);
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: currency,
@@ -245,6 +252,116 @@ const ItemEditorPanel = ({ item, group, onUpdate, onDelete, currency }) => {
   );
 };
 
+const GeneralSettingsPanel = ({ content, onUpdate }) => {
+  const { toast } = useToast();
+  const [localTitle, setLocalTitle] = useState(content.pageTitle || '');
+  const [localHighlight, setLocalHighlight] = useState(content.pageTitleHighlight || '');
+  const [localDesc, setLocalDesc] = useState(content.pageDescription || '');
+  const [localCurrency, setLocalCurrency] = useState(content.currency || 'USD');
+  const [localTax, setLocalTax] = useState(content.taxRate || 0);
+  const [localTC, setLocalTC] = useState(content.exchangeRate || 0);
+
+  useEffect(() => {
+    setLocalTitle(content.pageTitle || '');
+    setLocalHighlight(content.pageTitleHighlight || '');
+    setLocalDesc(content.pageDescription || '');
+    setLocalCurrency(content.currency || 'USD');
+    setLocalTax(content.taxRate || 0);
+    setLocalTC(content.exchangeRate || 0);
+  }, [content]);
+
+  const handleSave = () => {
+    onUpdate({
+      ...content,
+      pageTitle: localTitle,
+      pageTitleHighlight: localHighlight,
+      pageDescription: localDesc,
+      currency: localCurrency,
+      taxRate: localTax,
+      exchangeRate: localTC
+    });
+    toast({
+      title: "Configuración Guardada",
+      description: "Los ajustes generales se han actualizado y sincronizado.",
+    });
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <div className="flex items-center gap-2 border-b border-gray-800 pb-4 mb-6">
+        <Settings className="w-6 h-6 text-primary" />
+        <h2 className="text-xl font-bold text-white">Configuración General</h2>
+      </div>
+      <div className="grid grid-cols-1 gap-6">
+        <div className="space-y-2">
+          <Label className="text-gray-400">Título Principal</Label>
+          <Input
+            value={localTitle}
+            onChange={(e) => setLocalTitle(e.target.value)}
+            className="bg-gray-950 border-gray-800 focus:border-primary transition-colors"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label className="text-gray-400">Título Destacado</Label>
+          <Input
+            value={localHighlight}
+            onChange={(e) => setLocalHighlight(e.target.value)}
+            className="bg-gray-950 border-gray-800 focus:border-primary transition-colors"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label className="text-gray-400">Descripción de la Página</Label>
+          <Input
+            value={localDesc}
+            onChange={(e) => setLocalDesc(e.target.value)}
+            className="bg-gray-950 border-gray-800 focus:border-primary transition-colors"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label className="text-gray-400">Moneda</Label>
+            <Input
+              value={localCurrency}
+              onChange={(e) => setLocalCurrency(e.target.value)}
+              className="bg-gray-950 border-gray-800 focus:border-primary transition-colors"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-gray-400">Impuesto (%)</Label>
+            <Input
+              type="text"
+              value={localTax}
+              onChange={(e) => setLocalTax(e.target.value)}
+              className="bg-gray-950 border-gray-800 focus:border-primary transition-colors"
+            />
+          </div>
+        </div>
+
+        <div className="bg-primary/10 border border-primary/30 rounded-lg p-4">
+          <div className="space-y-2">
+            <Label className="text-primary font-bold flex items-center gap-2">
+              <DollarSign className="w-4 h-4" />
+              Tipo de Cambio (USD a MXN)
+            </Label>
+            <Input
+              type="text"
+              value={localTC}
+              onChange={(e) => setLocalTC(e.target.value)}
+              className="bg-black border-primary/50 focus:border-primary text-white font-mono text-lg"
+            />
+          </div>
+        </div>
+
+        <div className="pt-4 border-t border-gray-800">
+          <Button onClick={handleSave} className="w-full bg-primary hover:bg-primary/80 text-white">
+            <Save className="w-4 h-4 mr-2" /> Guardar Configuración
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const PropuestaEconomicaSection = ({
   sectionData = {},
   isEditorMode = false,
@@ -288,13 +405,23 @@ const PropuestaEconomicaSection = ({
     }
   }, [sectionData.content]);
 
+  // --- External Export Listener ---
+  useEffect(() => {
+    const handleGlobalExport = () => {
+      console.log("Global export triggered: Propuesta Económica");
+      generatePDF();
+    };
+    window.addEventListener('SOLIFOOD_EXPORT_PROPUESTA', handleGlobalExport);
+    return () => window.removeEventListener('SOLIFOOD_EXPORT_PROPUESTA', handleGlobalExport);
+  }, [content, quotationData]); // Dependencies for generatePDF
+
   const activeItems = content.groups.flatMap(g => g.items).filter(i => i.isActive);
-  const subtotal = activeItems.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
-  const totalKW = activeItems.reduce((sum, item) => sum + (parseFloat(item.kw) || 0), 0);
-  const totalTax = subtotal * (content.taxRate / 100);
+  const subtotal = activeItems.reduce((sum, item) => sum + cleanNum(item.price), 0);
+  const totalKW = activeItems.reduce((sum, item) => sum + cleanNum(item.kw), 0);
+  const totalTax = subtotal * (cleanNum(content.taxRate) / 100);
   const totalUSD = subtotal + totalTax;
   // User requested TOTAL to be Subtotal (Pre-tax). So MXN conversion should also be Pre-tax.
-  const totalMXN = subtotal * (parseFloat(content.exchangeRate) || 1);
+  const totalMXN = subtotal * cleanNum(content.exchangeRate);
 
   const updateContent = (newContent) => {
     // Optimistic update
@@ -609,76 +736,10 @@ const PropuestaEconomicaSection = ({
   const renderRightPanelContent = () => {
     if (activeSelection.type === 'general') {
       return (
-        <div className="space-y-6 animate-in fade-in duration-300">
-          <div className="flex items-center gap-2 border-b border-gray-800 pb-4 mb-6">
-            <Settings className="w-6 h-6 text-primary" />
-            <h2 className="text-xl font-bold text-white">Configuración General</h2>
-          </div>
-          <div className="grid grid-cols-1 gap-6">
-            <div className="space-y-2">
-              <Label className="text-gray-400">Título Principal</Label>
-              <Input
-                value={content.pageTitle || ''}
-                onChange={(e) => updateContent({ ...content, pageTitle: e.target.value })}
-                className="bg-gray-950 border-gray-800 focus:border-primary transition-colors"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-gray-400">Título Destacado (Azul)</Label>
-              <Input
-                value={content.pageTitleHighlight || ''}
-                onChange={(e) => updateContent({ ...content, pageTitleHighlight: e.target.value })}
-                className="bg-gray-950 border-gray-800 focus:border-primary transition-colors"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-gray-400">Descripción de la Página</Label>
-              <Input
-                value={content.pageDescription || ''}
-                onChange={(e) => updateContent({ ...content, pageDescription: e.target.value })}
-                className="bg-gray-950 border-gray-800 focus:border-primary transition-colors"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-gray-400">Moneda</Label>
-                <Input
-                  value={content.currency || 'USD'}
-                  onChange={(e) => updateContent({ ...content, currency: e.target.value })}
-                  className="bg-gray-950 border-gray-800 focus:border-primary transition-colors"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-gray-400">Impuesto (%)</Label>
-                <Input
-                  type="number"
-                  value={content.taxRate || 0}
-                  onChange={(e) => updateContent({ ...content, taxRate: parseFloat(e.target.value) || 0 })}
-                  className="bg-gray-950 border-gray-800 focus:border-primary transition-colors"
-                />
-              </div>
-            </div>
-
-            <div className="bg-primary/10 border border-primary/30 rounded-lg p-4">
-              <div className="space-y-2">
-                <Label className="text-primary font-bold flex items-center gap-2">
-                  <DollarSign className="w-4 h-4" />
-                  Tipo de Cambio (USD a MXN)
-                </Label>
-                <Input
-                  type="number"
-                  step="0.1"
-                  value={content.exchangeRate}
-                  onChange={(e) => updateContent({ ...content, exchangeRate: parseFloat(e.target.value) || 0 })}
-                  className="bg-black border-primary/50 focus:border-primary text-white font-mono text-lg"
-                />
-                <p className="text-xs text-gray-500">
-                  Se utilizará para calcular el estimado en moneda nacional en la propuesta.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <GeneralSettingsPanel
+          content={content}
+          onUpdate={updateContent}
+        />
       );
     }
 
@@ -713,7 +774,7 @@ const PropuestaEconomicaSection = ({
             <h4 className="text-sm font-medium text-gray-400 mb-2">Resumen del Grupo</h4>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>Items: <span className="text-white">{group.items.length}</span></div>
-              <div>Total: <span className="text-primary">{formatCurrency(group.items.reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0), content.currency)}</span></div>
+              <div>Total: <span className="text-primary">{formatCurrency(group.items.reduce((sum, i) => sum + cleanNum(i.price), 0), content.currency)}</span></div>
             </div>
           </div>
         </div>
@@ -781,7 +842,7 @@ const PropuestaEconomicaSection = ({
 
           <div className="lg:col-span-2 space-y-8">
             {content.groups.map((group) => {
-              const groupTotal = group.items.filter(i => i.isActive).reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0);
+              const groupTotal = group.items.filter(i => i.isActive).reduce((sum, i) => sum + cleanNum(i.price), 0);
 
               return (
                 <div key={group.id} className="bg-[#111] rounded-xl border border-gray-800 overflow-hidden">

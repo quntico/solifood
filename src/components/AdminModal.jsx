@@ -350,18 +350,43 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
       };
 
       try {
-        const { error } = await supabase.from('quotations').update(dataToSave).eq('theme_key', activeTheme);
-        if (error) {
-          console.warn("[AdminModal] Save failed, checking for missing column error...", error);
+        let attemptData = { ...dataToSave };
+        let saveSuccess = false;
+        let lastError = null;
+
+        // Dynamic recovery strategy for missing columns (42703 error)
+        for (let i = 0; i < 5; i++) { // Max 5 retries for different missing columns
+          const { error } = await supabase.from('quotations').update(attemptData).eq('theme_key', activeTheme);
+
+          if (!error) {
+            saveSuccess = true;
+            break;
+          }
+
           if (error.code === '42703') {
-            console.log("[AdminModal] video_url column missing, retrying with sections_config only...");
-            const { video_url, ...safeData } = dataToSave;
-            const { error: retryError } = await supabase.from('quotations').update(safeData).eq('theme_key', activeTheme);
-            if (retryError) throw retryError;
+            console.warn("[AdminModal] Column missing in DB, removing from payload and retrying...", error.message);
+            // Extract column name from error message (PostgreSQL error message format)
+            const match = error.message.match(/column "([^"]+)"/);
+            const columnName = match ? match[1] : null;
+
+            if (columnName && attemptData.hasOwnProperty(columnName)) {
+              delete attemptData[columnName];
+              continue; // Retry with cleaned data
+            } else {
+              // Fallback: If we can't parse the column name, use manual known missing columns
+              console.log("[AdminModal] Falling back to manual cleanup...");
+              delete attemptData.video_url;
+              delete attemptData.hero_video_is_integrated;
+              delete attemptData.hero_video_scale;
+              delete attemptData.hero_video_border_radius;
+            }
           } else {
-            throw error;
+            lastError = error;
+            break; // Other error, don't retry
           }
         }
+
+        if (!saveSuccess) throw lastError || new Error("Error desconocido al guardar.");
 
         setThemes(prev => ({
           ...prev,
@@ -481,8 +506,8 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
 
   const handleCopyLink = () => {
     if (currentThemeData?.slug) {
-      navigator.clipboard.writeText(`https://www.solimaq.site/cotizacion/${currentThemeData.slug}`);
-      toast({ title: "Copiado 📋", description: "Enlace en portapapeles (solimaq.site)." });
+      navigator.clipboard.writeText(`https://www.solifood.site/cotizacion/${currentThemeData.slug}`);
+      toast({ title: "Copiado 📋", description: "Enlace en portapapeles (solifood.site)." });
     } else {
       toast({ title: "Sin Slug", description: "Esta cotización no tiene slug.", variant: "destructive" });
     }
@@ -490,8 +515,8 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
 
   const handleOpenLink = () => {
     if (currentThemeData?.slug) {
-      // Force solimaq.site as requested
-      window.open(`https://www.solimaq.site/cotizacion/${currentThemeData.slug}`, '_blank');
+      // Force solifood.site as requested
+      window.open(`https://www.solifood.site/cotizacion/${currentThemeData.slug}`, '_blank');
     }
   };
 
@@ -742,21 +767,33 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
 
                 <div><Label htmlFor="company" className="text-primary mb-2 block font-semibold">{t('adminModal.company')}</Label><Input id="company" name="company" value={currentThemeData.company || ''} onChange={handleInputChange} className="bg-black/20 border-white/10 text-white focus:border-primary backdrop-blur-sm" /></div>
 
-                {/* Start Page Switch */}
-                <div className="flex items-center gap-4 mt-2">
-                  <div className="flex items-center gap-2">
-                    <Home className={`w-5 h-5 ${currentThemeData.is_home ? 'text-primary' : 'text-gray-400'}`} />
-                    <Label htmlFor="is_home" className="text-white cursor-pointer select-none font-semibold">
-                      {t('adminModal.setAsHomePage') || "Página de Inicio"}
-                    </Label>
-                  </div>
-                  <Switch
-                    id="is_home"
-                    checked={!!currentThemeData.is_home}
-                    onCheckedChange={handleSetAsHome}
+                {/* Inicio / Proyecto Activo */}
+                <div className="flex flex-col gap-2 p-4 rounded-xl border border-white/10 bg-black/20 backdrop-blur-sm">
+                  <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                    VISIBILIDAD (DEFAULT)
+                  </Label>
+                  <Button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleSetAsHome();
+                    }}
                     disabled={isSaving}
-                    className="data-[state=checked]:bg-primary"
-                  />
+                    className={cn(
+                      "w-full h-12 flex items-center justify-center gap-3 rounded-lg border transition-all duration-300",
+                      currentThemeData.is_home
+                        ? "bg-yellow-500/10 border-yellow-500/60 text-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.1)]"
+                        : "bg-black/40 border-white/10 text-gray-400 hover:border-yellow-500/40 hover:bg-yellow-500/5"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-2 h-2 rounded-full",
+                      currentThemeData.is_home ? "bg-green-500 shadow-[0_0_8px_#22c55e]" : "bg-green-900/30"
+                    )} />
+                    <Home className={cn("w-5 h-5", currentThemeData.is_home ? "text-yellow-500" : "text-gray-500")} />
+                    <span className="font-black tracking-tighter uppercase text-sm">
+                      PROYECTO ACTIVO
+                    </span>
+                  </Button>
                 </div>
 
                 <div><Label htmlFor="project" className="text-primary mb-2 block font-semibold">{t('adminModal.project')}</Label><Input id="project" name="project" value={currentThemeData.project || ''} onChange={handleInputChange} className="bg-black/20 border-white/10 text-white focus:border-primary backdrop-blur-sm" /></div>
@@ -882,7 +919,7 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
             <div className="bg-white p-8 rounded-xl flex flex-col items-center gap-6 shadow-2xl" onClick={e => e.stopPropagation()}>
               <h3 className="text-2xl font-bold text-black">Código QR</h3>
               <div className="p-4 bg-white rounded-lg shadow-inner border border-gray-200">
-                <QRCodeCanvas value={`https://www.solimaq.site/cotizacion/${currentThemeData.slug}`} size={256} level="H" includeMargin={true} />
+                <QRCodeCanvas value={`https://www.solifood.site/cotizacion/${currentThemeData.slug}`} size={256} level="H" includeMargin={true} />
               </div>
               <div className="text-center">
                 <p className="text-sm text-gray-600 font-medium mb-1">{currentThemeData.project}</p>

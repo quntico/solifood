@@ -57,6 +57,7 @@ const defaultContent = {
 };
 
 const ProcesoSection = ({ sectionData, isEditorMode, onContentChange }) => {
+  const { toast } = useToast();
 
   const content = { ...defaultContent, ...sectionData.content };
   const steps = content.steps || defaultContent.steps;
@@ -74,7 +75,7 @@ const ProcesoSection = ({ sectionData, isEditorMode, onContentChange }) => {
   });
 
   const handleModalSave = (newSteps) => {
-    onContentChange({ ...content, steps: newSteps });
+    onContentChange({ steps: newSteps });
     toast({ title: 'Flujo actualizado', description: 'Los cambios se han guardado correctamente.' });
   };
 
@@ -82,7 +83,11 @@ const ProcesoSection = ({ sectionData, isEditorMode, onContentChange }) => {
     <div className="py-16 sm:py-24 bg-black text-white relative">
       <div className="max-w-7xl mx-auto px-4">
         <div className="relative">
-          <SectionHeader sectionData={sectionData} />
+          <SectionHeader
+            sectionData={sectionData}
+            isEditorMode={isEditorMode}
+            onContentChange={onContentChange}
+          />
 
           {isEditorMode && (
             <div className="absolute top-0 right-0 z-20">
@@ -110,49 +115,100 @@ const ProcesoSection = ({ sectionData, isEditorMode, onContentChange }) => {
               const isLeft = index % 2 === 0;
 
               return (
-                <div key={step.id} className="grid grid-cols-[auto_1fr] sm:grid-cols-[1fr_auto_1fr] items-start gap-x-6 sm:gap-x-8">
-                  {/* Left Card (Desktop only) */}
-                  {isLeft && (
-                    <motion.div
-                      initial={{ x: -50, opacity: 0 }}
-                      whileInView={{ x: 0, opacity: 1 }}
-                      viewport={{ once: true, amount: 0.5 }}
-                      transition={{ duration: 0.6 }}
-                      className="hidden sm:block bg-gray-900/50 p-6 rounded-xl border border-primary/40 backdrop-blur-sm text-right shadow-[0_0_15px_hsl(var(--primary)/0.15)] hover:border-primary transition-all duration-300 hover:shadow-[0_0_30px_hsl(var(--primary)/0.3)]"
-                    >
-                      <TimelineCardContent step={step} />
-                    </motion.div>
-                  )}
-                  {!isLeft && <div className="hidden sm:block"></div>}
+                <div key={step.id} className="grid grid-cols-[auto_1fr] sm:grid-cols-[1fr_auto_1fr] items-stretch gap-x-6 sm:gap-x-12">
+                  {/* Left Column (Desktop) */}
+                  <div className="hidden sm:block">
+                    {isLeft ? (
+                      <motion.div
+                        initial={{ x: -50, opacity: 0 }}
+                        whileInView={{ x: 0, opacity: 1 }}
+                        viewport={{ once: true, amount: 0.5 }}
+                        transition={{ duration: 0.6 }}
+                        className="bg-gray-900/50 p-6 rounded-xl border border-primary/40 backdrop-blur-sm shadow-[0_0_15px_hsl(var(--primary)/0.15)] hover:border-primary transition-all duration-300 hover:shadow-[0_0_30px_hsl(var(--primary)/0.3)] h-full flex flex-col justify-center"
+                      >
+                        <TimelineCardContent step={step} isLeft={isLeft} />
+                      </motion.div>
+                    ) : (
+                      step.image_url && (
+                        <motion.div
+                          initial={{ opacity: 0.4 }}
+                          whileHover={{ opacity: 1 }}
+                          className="w-full h-full min-h-[12rem] rounded-xl overflow-hidden border border-primary/20 bg-black/40 shadow-2xl transition-all duration-500"
+                        >
+                          <img
+                            src={step.image_url}
+                            alt={step.title}
+                            className="w-full h-full object-cover"
+                          />
+                        </motion.div>
+                      )
+                    )}
+                  </div>
 
-                  {/* Icon */}
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    whileInView={{ scale: 1 }}
-                    viewport={{ once: true, amount: 0.8 }}
-                    transition={{ duration: 0.5, type: 'spring' }}
-                    className="row-start-1 sm:col-start-2 sm:row-start-auto z-10 p-3 sm:p-4 bg-gray-900 rounded-full border-2 border-primary shadow-[0_0_15px_hsl(var(--primary)/0.4)] relative group cursor-pointer"
-                    onClick={() => isEditorMode && setIsModalOpen(true)}
-                  >
-                    <IconComponent className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
-                    {isEditorMode && (
-                      <div className="absolute inset-0 bg-primary/20 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <Edit className="w-4 h-4 text-white" />
+                  {/* Icon Column */}
+                  <div className="flex flex-col items-center justify-start pt-6">
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      whileInView={{ scale: 1 }}
+                      viewport={{ once: true, amount: 0.8 }}
+                      transition={{ duration: 0.5, type: 'spring' }}
+                      className="z-10 p-3 sm:p-4 bg-gray-900 rounded-full border-2 border-primary shadow-[0_0_15px_hsl(var(--primary)/0.4)] relative group cursor-pointer"
+                      onClick={() => isEditorMode && setIsModalOpen(true)}
+                    >
+                      <IconComponent className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
+                      {isEditorMode && (
+                        <div className="absolute inset-0 bg-primary/20 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <Edit className="w-4 h-4 text-white" />
+                        </div>
+                      )}
+                    </motion.div>
+                  </div>
+
+                  {/* Right Column (Desktop) / Main Column (Mobile) */}
+                  <div className="sm:block">
+                    {!isLeft ? (
+                      <motion.div
+                        initial={{ x: 50, opacity: 0 }}
+                        whileInView={{ x: 0, opacity: 1 }}
+                        viewport={{ once: true, amount: 0.5 }}
+                        transition={{ duration: 0.6 }}
+                        className="bg-gray-900/50 p-6 rounded-xl border border-primary/40 backdrop-blur-sm shadow-[0_0_15px_hsl(var(--primary)/0.15)] hover:border-primary transition-all duration-300 hover:shadow-[0_0_30px_hsl(var(--primary)/0.3)] h-full flex flex-col justify-center"
+                      >
+                        <TimelineCardContent step={step} isLeft={isLeft} />
+                      </motion.div>
+                    ) : (
+                      <div className="hidden sm:block">
+                        {step.image_url && (
+                          <motion.div
+                            initial={{ opacity: 0.4 }}
+                            whileHover={{ opacity: 1 }}
+                            className="w-full h-full min-h-[12rem] rounded-xl overflow-hidden border border-primary/20 bg-black/40 shadow-2xl transition-all duration-500"
+                          >
+                            <img
+                              src={step.image_url}
+                              alt={step.title}
+                              className="w-full h-full object-cover"
+                            />
+                          </motion.div>
+                        )}
                       </div>
                     )}
-                  </motion.div>
 
-                  {/* Right Card (or Mobile Card) */}
-                  <motion.div
-                    initial={{ x: isLeft ? 0 : 50, opacity: 0 }}
-                    whileInView={{ x: 0, opacity: 1 }}
-                    viewport={{ once: true, amount: 0.5 }}
-                    transition={{ duration: 0.6 }}
-                    className={`bg-gray-900/50 p-6 rounded-xl border border-primary/40 backdrop-blur-sm ${!isLeft ? 'sm:block' : 'sm:hidden'} shadow-[0_0_15px_hsl(var(--primary)/0.15)] hover:border-primary transition-all duration-300 hover:shadow-[0_0_30px_hsl(var(--primary)/0.3)]`}
-                  >
-                    <TimelineCardContent step={step} />
-                  </motion.div>
-                  {!isLeft && <div className="hidden sm:block"></div>}
+                    {/* Mobile Image (shown below card for better visibility) */}
+                    <div className="sm:hidden mt-4">
+                      {step.image_url && (
+                        <div className="w-full h-40 rounded-xl overflow-hidden border border-primary/20 bg-black/40 shadow-xl">
+                          <img
+                            src={step.image_url}
+                            alt={step.title}
+                            className="w-full h-full object-contain"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+
 
                 </div>
               );
@@ -171,20 +227,32 @@ const ProcesoSection = ({ sectionData, isEditorMode, onContentChange }) => {
   );
 };
 
-const TimelineCardContent = ({ step }) => (
-  <>
-    <h3 className="text-base font-bold text-white mb-2 sm:text-lg">
-      {step.title}
-    </h3>
-    <ul className="space-y-1.5 text-gray-400 text-sm flex flex-col">
-      {step.details.map((detail, detailIndex) => (
-        <li key={detailIndex} className="flex items-center gap-2 justify-end sm:justify-inherit">
-          {/* Simple rendering, details handled in modal */}
-          <span>{detail}</span>
-        </li>
-      ))}
-    </ul>
-  </>
-);
+const TimelineCardContent = ({ step, isLeft }) => {
+  const alignment = step.align || 'left';
+
+  return (
+    <div className="flex flex-col h-full justify-center">
+      <h3
+        className="text-base font-bold text-white mb-4 sm:text-lg uppercase tracking-tight"
+        style={{ textAlign: alignment === 'justify' ? 'left' : alignment }}
+      >
+        {step.title}
+      </h3>
+      <ul
+        className="space-y-3 text-gray-400 text-sm flex flex-col"
+        style={{ textAlign: alignment }}
+      >
+        {step.details.map((detail, detailIndex) => (
+          <li
+            key={detailIndex}
+            className={`leading-relaxed ${alignment === 'center' ? 'items-center' : alignment === 'right' ? 'items-end' : 'items-start'}`}
+          >
+            {detail}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
 
 export default ProcesoSection;

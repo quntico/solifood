@@ -83,7 +83,7 @@ const AddQuotationDialog = ({ isOpen, onClose, onAdd, activeTheme }) => {
       // 1. Insert DB record to get an ID
       const { data: dbData, error: dbError } = await supabase
         .from('pdf_quotations')
-        .insert({ name: name.trim(), theme_key: activeTheme, file_path: 'uploading' })
+        .insert({ name: name.trim(), theme_key: activeTheme, url: 'uploading' })
         .select()
         .single();
 
@@ -132,7 +132,7 @@ const AddQuotationDialog = ({ isOpen, onClose, onAdd, activeTheme }) => {
 
       const { data: updatedData, error: updateError } = await supabase
         .from('pdf_quotations')
-        .update({ file_path: finalStoredPath })
+        .update({ url: finalStoredPath })
         .eq('id', dbData.id)
         .select()
         .single();
@@ -237,17 +237,43 @@ const PDFSection = ({ isEditorMode, setIsEditorMode, activeTheme, sectionData })
     fetchQuotations();
   }, [fetchQuotations]);
 
+  // --- External Export Listener ---
+  useEffect(() => {
+    const handleGlobalExport = async () => {
+      console.log("Global export triggered: PDF Document");
+      const docToExport = selectedQuotation || quotations[0];
+      if (docToExport) {
+        toast({ title: "Descargando PDF...", description: `Iniciando descarga de: ${docToExport.name}` });
+        const cache = await loadPdfToCache(docToExport);
+        if (cache && cache.pdfUrl) {
+          const link = document.createElement('a');
+          link.href = cache.pdfUrl; // Use the Blob ObjectURL
+          link.setAttribute('download', `${docToExport.name}.pdf`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        } else {
+          toast({ title: "Error", description: "No se pudo obtener el enlace de descarga.", variant: "destructive" });
+        }
+      } else {
+        toast({ title: "No hay PDF", description: "No se encontró ningún documento PDF para descargar.", variant: "destructive" });
+      }
+    };
+    window.addEventListener('SOLIFOOD_EXPORT_PDF_DOC', handleGlobalExport);
+    return () => window.removeEventListener('SOLIFOOD_EXPORT_PDF_DOC', handleGlobalExport);
+  }, [quotations, selectedQuotation, activeBucket]);
+
   /* PDF Cache Ref to store blob URLs and prevent re-fetching: { [id]: { pdfUrl, downloadUrl } } */
   const pdfCache = useRef({});
 
   const loadPdfToCache = useCallback(async (quotation) => {
-    if (!quotation || !quotation.file_path || quotation.file_path === 'uploading') return null;
+    if (!quotation || !quotation.url || quotation.url === 'uploading') return null;
 
     if (pdfCache.current[quotation.id]) {
       return pdfCache.current[quotation.id];
     }
 
-    const filePath = quotation.file_path;
+    const filePath = quotation.url;
     const parts = filePath.split('/');
     const potentialBucket = parts[0];
     const knownBuckets = ['quotation-pdfs', 'quotation-files', 'public', 'storage', 'logos-bucket'];
@@ -383,9 +409,9 @@ const PDFSection = ({ isEditorMode, setIsEditorMode, activeTheme, sectionData })
     setSelectedQuotation(newQuotation);
   };
 
-  const handleDeleteQuotation = async (id, filePath) => {
-    if (filePath) {
-      const parts = filePath.split('/');
+  const handleDeleteQuotation = async (id, url) => {
+    if (url) {
+      const parts = url.split('/');
       const potentialBucket = parts[0];
       const knownBuckets = ['quotation-pdfs', 'quotation-files', 'public', 'storage', 'logos-bucket'];
 
@@ -503,7 +529,7 @@ const PDFSection = ({ isEditorMode, setIsEditorMode, activeTheme, sectionData })
                           ) : (
                             <Button size="icon" variant="ghost" onClick={() => setEditingQuotation(q.id)}><Edit className="w-4 h-4 text-primary hover:text-primary" /></Button>
                           )}
-                          <Button size="icon" variant="ghost" onClick={() => handleDeleteQuotation(q.id, q.file_path)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
+                          <Button size="icon" variant="ghost" onClick={() => handleDeleteQuotation(q.id, q.url)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
                         </div>
                       )}
                     </div>

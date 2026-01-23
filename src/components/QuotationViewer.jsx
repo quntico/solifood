@@ -147,6 +147,7 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
     scale: 1,
     borderRadius: 20
   });
+  const [isHeaderScrolled, setIsHeaderScrolled] = useState(false);
   const idleTimerRef = useRef(null);
   const initialDisplayTimerRef = useRef(null);
   const hasInteracted = useRef(false);
@@ -342,6 +343,18 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
   }, [resetIdleTimer, displayData]);
 
   useEffect(() => {
+    const scrollContainer = document.getElementById('main-content-scroll-area');
+    if (!scrollContainer) return;
+
+    const handleScroll = () => {
+      setIsHeaderScrolled(scrollContainer.scrollTop > 50);
+    };
+
+    scrollContainer.addEventListener('scroll', handleScroll);
+    return () => scrollContainer.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
     if (displayData) {
       if (isAdminView) localStorage.setItem('activeTheme', activeTheme);
       document.body.className = 'theme-nova';
@@ -374,37 +387,103 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
   }, []);
 
   const setSectionsConfig = async (newConfig) => {
-    // Sanitize config to remove Component and other derived props before saving
-    const sanitizedConfig = newConfig.map(({ Component, ...rest }) => rest);
+    // 1. Resolve full current configuration to ensure we don't lose anything
+    const fullConfigRaw = themes[activeTheme]?.sections_config;
+    const fullArray = Array.isArray(fullConfigRaw) ? fullConfigRaw : (fullConfigRaw?.sections || defaultSections);
+
+    let finalConfigArray;
+
+    // Safety: ensure newConfig is an array
+    const newConfigArray = Array.isArray(newConfig) ? newConfig : [];
+
+    // 2. Logic to merge or overwrite
+    // If we only have a subset (like from Sidebar's filtered list), merge it
+    if (newConfigArray.length < fullArray.length && newConfigArray.length > 0) {
+      const newConfigIds = new Set(newConfigArray.map(s => s.id));
+      const excludedItems = fullArray.filter(s => !newConfigIds.has(s.id));
+      finalConfigArray = [...newConfigArray, ...excludedItems];
+    } else {
+      finalConfigArray = newConfigArray;
+    }
+
+    // 3. Sanitize to remove non-persistent props
+    const sanitizedConfig = finalConfigArray.map(({ Component, subItems, ...rest }) => rest);
+
+    // 4. Create wrapped payload consistent with DB and AdminModal
+    const wrappedPayload = {
+      sections: sanitizedConfig,
+      heroVideoUrl: themes[activeTheme]?.video_url || initialQuotationData.video_url,
+      updated_at: new Date().toISOString()
+    };
 
     try {
+      // Update Local State (using functional update to be safe)
       setThemes(prevThemes => ({
         ...prevThemes,
-        [activeTheme]: { ...prevThemes[activeTheme], sections_config: sanitizedConfig },
+        [activeTheme]: {
+          ...prevThemes[activeTheme],
+          sections_config: wrappedPayload // Consistently save the wrapped object
+        },
       }));
 
-      // WRAPPED SAVE: Always save as object to support metadata
-      const wrappedPayload = {
-        sections: sanitizedConfig,
-        heroVideoUrl: displayData.video_url, // Use the current video url
-        updated_at: new Date().toISOString()
-      };
-
+      // Persist to Supabase
       const { error } = await supabase
         .from('quotations')
         .update({ sections_config: wrappedPayload })
         .eq('theme_key', activeTheme);
 
       if (error) throw error;
+
+      if (isEditorMode) {
+        toast({
+          title: "Sincronizado",
+          description: "La configuración se ha guardado correctamente.",
+          duration: 3000
+        });
+      }
     } catch (err) {
       console.error("Error saving sections config:", err);
       toast({
         title: "Error de Guardado",
-        description: `Error: ${err.message || err.details || "Desconocido"}.`,
+        description: `No se pudo guardar: ${err.message || "Error desconocido"}.`,
         variant: "destructive",
         duration: 5000
       });
     }
+  };
+
+  const handleDeleteSection = async (sectionId) => {
+    const fullConfigRaw = themes[activeTheme]?.sections_config;
+    const fullArray = Array.isArray(fullConfigRaw) ? fullConfigRaw : (fullConfigRaw?.sections || defaultSections);
+
+    const newConfig = fullArray.map(s =>
+      s.id === sectionId ? { ...s, _deleted: true } : s
+    );
+
+    await setSectionsConfig(newConfig);
+  };
+
+  const handleDuplicateSection = async (sectionId) => {
+    const fullConfigRaw = themes[activeTheme]?.sections_config;
+    const fullArray = Array.isArray(fullConfigRaw) ? fullConfigRaw : (fullConfigRaw?.sections || defaultSections);
+
+    const sourceIdx = fullArray.findIndex(s => s.id === sectionId);
+    if (sourceIdx === -1) return;
+
+    const source = fullArray[sourceIdx];
+    const newId = `${source.id}_copy_${Date.now()}`;
+    const newSection = {
+      ...source,
+      id: newId,
+      label: `${source.label} (Copia)`,
+      _isCopy: true,
+      isVisible: true // Default copy to visible
+    };
+
+    const newArray = [...fullArray];
+    newArray.splice(sourceIdx + 1, 0, newSection);
+
+    await setSectionsConfig(newArray);
   };
 
   const [activeTabMap, setActiveTabMap] = useState({});
@@ -469,46 +548,30 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
     menuItems = menuItems.filter(item => !item._deleted);
   }
 
-  const handleDeleteSection = async (sectionId) => {
-    const fullConfig = displayData.sections_config || defaultSections;
-    // Map over FULL config to mark item as deleted
-    const newConfig = fullConfig.map(s =>
-      s.id === sectionId ? { ...s, _deleted: true } : s
-    );
-
-    await setSectionsConfig(newConfig);
-
-    toast({
-      title: "Sección eliminada",
-      description: "La sección se ha eliminado correctamente.",
-    });
-  };
-
   const handleVideoUrlUpdate = async (newUrl) => {
-    const updatedDate = new Date().toISOString();
+    const fullConfigRaw = themes[activeTheme]?.sections_config;
+    const fullArray = Array.isArray(fullConfigRaw) ? fullConfigRaw : (fullConfigRaw?.sections || defaultSections);
 
-    // REDUNDANCY: In Standard Viewer, sections_config is usually an Array of sections.
-    // We update the themes state immediately.
-    const updatedData = {
-      ...displayData,
-      video_url: newUrl,
+    // Call setSectionsConfig with the current array but it will internally update videoUrl in the wrapper
+    // Actually, safer to update it here and call if we want custom behavior.
+
+    const updatedDate = new Date().toISOString();
+    const wrappedPayload = {
+      sections: fullArray.map(({ Component, subItems, ...rest }) => rest),
+      heroVideoUrl: newUrl,
       updated_at: updatedDate
     };
 
     setThemes(prev => ({
       ...prev,
-      [activeTheme]: updatedData
+      [activeTheme]: {
+        ...prev[activeTheme],
+        video_url: newUrl,
+        sections_config: wrappedPayload
+      }
     }));
 
     try {
-      // Primary attempt: Save to dedicated columns.
-      // We ALSO save to sections_config as a fallback for absolute persistence.
-      const wrappedPayload = {
-        sections: sectionsArray,
-        heroVideoUrl: newUrl,
-        updated_at: updatedDate
-      };
-
       const { error } = await supabase
         .from('quotations')
         .update({
@@ -519,15 +582,14 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
         .eq('theme_key', activeTheme);
 
       if (error) {
-        console.warn("[QuotationViewer] Primary save failed, retrying with wrapped config only...", error);
         // Fallback: Save ONLY to sections_config if video_url column is missing
         await supabase
           .from('quotations')
-          .update({
-            sections_config: wrappedPayload
-          })
+          .update({ sections_config: wrappedPayload })
           .eq('theme_key', activeTheme);
       }
+
+      toast({ title: "Video actualizado", description: "La URL se ha guardado correctamente." });
     } catch (err) {
       console.error("Critical save error in QuotationViewer:", err);
       toast({ title: "Error", description: "No se pudo guardar la URL del video.", variant: "destructive" });
@@ -620,7 +682,11 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
       </Helmet>
       {isAdminView && showPasswordPrompt && (
         <PasswordPrompt
-          onCorrectPassword={() => { setIsAdminAuthenticated(true); setShowPasswordPrompt(false); }}
+          onCorrectPassword={(pw) => {
+            setIsAdminAuthenticated(true);
+            setShowPasswordPrompt(false);
+            if (pw === '2021') setIsEditorMode(true);
+          }}
           onCancel={() => setShowPasswordPrompt(false)}
         />
       )}
@@ -694,6 +760,7 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
             activeTabMap={activeTabMap}
             setIsEditorMode={setIsEditorMode}
             onAdminClick={() => isAdminView && setShowAdminModal(true)}
+            isScrolled={isHeaderScrolled}
           />
           <div id="main-content-scroll-area" className="flex-1 overflow-y-auto overflow-x-hidden pb-20 lg:pb-0">
             {renderActiveComponent()}

@@ -109,6 +109,16 @@ const FichaTecnicaSection = ({ sectionData, quotationData, isEditorMode, onConte
     }
   }, [content, activeTab]);
 
+  // --- External Export Listener ---
+  useEffect(() => {
+    const handleGlobalExport = () => {
+      console.log("Global export triggered: Fichas Técnicas");
+      handleExportPDF();
+    };
+    window.addEventListener('SOLIFOOD_EXPORT_FICHAS', handleGlobalExport);
+    return () => window.removeEventListener('SOLIFOOD_EXPORT_FICHAS', handleGlobalExport);
+  }, [content, quotationData]);
+
   const updateAllContent = (newContent) => {
     setContent(newContent);
     if (onContentChange && isModeAdmin) {

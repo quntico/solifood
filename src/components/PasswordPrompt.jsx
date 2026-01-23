@@ -12,12 +12,12 @@ const PasswordPrompt = ({ onCorrectPassword, onCancel }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (password === '2020') {
+    if (password === '2020' || password === '2021') {
       setError(false);
-      onCorrectPassword();
+      onCorrectPassword(password);
       toast({
         title: 'Acceso Concedido',
-        description: 'Bienvenido, Administrador.',
+        description: password === '2021' ? 'Modo Master Activado (Admin + Editor).' : 'Bienvenido, Administrador.',
       });
     } else {
       setError(true);

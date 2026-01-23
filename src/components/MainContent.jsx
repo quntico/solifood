@@ -33,7 +33,7 @@ const MainContent = ({
 
     const newSections = sourceList.map(sec =>
       sec.id === sectionId
-        ? { ...sec, content: { ...sec.content, ...newContent } }
+        ? { ...sec, content: { ...(sec.content || {}), ...newContent } }
         : sec
     );
     onSectionContentUpdate(newSections);
@@ -69,14 +69,9 @@ const MainContent = ({
         const Component = section.Component;
         if (!Component) return null;
 
-        const config = quotationData.sections_config;
-        const sectionsArrayData = Array.isArray(config) ? config : (config?.sections || []);
-
-        const savedData = sectionsArrayData.find(s => s.id === section.id);
-        const sectionDataWithContent = {
-          ...section,
-          ...savedData,
-        };
+        // Since 'sections' prop (menuItems) is already merged with 'sections_config' in QuotationViewer,
+        // we can use section directly.
+        const sectionDataWithContent = section;
 
         const props = {
           sectionData: sectionDataWithContent,
@@ -84,7 +79,7 @@ const MainContent = ({
           isEditorMode,
           setIsEditorMode,
           activeTheme,
-          onContentChange: (newContent) => handleSectionContentChange(section.id, newContent),
+          onContentChange: (newContent) => handleContentChange(section.id, newContent),
           onDataChange: (newData) => handleSectionDataChange(section.id, newData),
           activeTab: activeTabMap ? activeTabMap[section.id] : undefined, // Pass activeTab
           ...(section.id === 'propuesta' && { sections: allSections }),

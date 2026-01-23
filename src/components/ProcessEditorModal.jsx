@@ -3,13 +3,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Trash2, Plus, ArrowUp, ArrowDown } from 'lucide-react';
+import { Trash2, Plus, ArrowUp, ArrowDown, Image as ImageIcon, Loader2, AlignLeft, AlignCenter, AlignJustify } from 'lucide-react';
 import IconPicker from '@/components/IconPicker';
 import { iconMap } from '@/lib/iconMap';
+import { supabase } from '@/lib/customSupabaseClient';
+import { getActiveBucket } from '@/lib/bucketResolver';
 
 const ProcessEditorModal = ({ isOpen, onClose, initialSteps, onSave }) => {
     const [steps, setSteps] = useState(initialSteps || []);
     const [editingStepId, setEditingStepId] = useState(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const fileInputRef = React.useRef(null);
 
     useEffect(() => {
         if (isOpen) {
@@ -32,6 +36,7 @@ const ProcessEditorModal = ({ isOpen, onClose, initialSteps, onSave }) => {
             id: `step-${Date.now()}`,
             title: 'Nuevo Proceso',
             icon: 'Layers',
+            align: 'left',
             details: ['- Detalle 1', '- Detalle 2']
         };
         setSteps([...steps, newStep]);
@@ -65,6 +70,34 @@ const ProcessEditorModal = ({ isOpen, onClose, initialSteps, onSave }) => {
         handleUpdateStep(stepId, 'details', newDetails);
     };
 
+    const handleImageUpload = async (stepId, file) => {
+        if (!file) return;
+        setIsUploading(true);
+        try {
+            const bucket = await getActiveBucket();
+            const fileExt = file.name.split('.').pop();
+            const fileName = `process_${stepId}_${Date.now()}.${fileExt}`;
+            const filePath = `process_images/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from(bucket)
+                .upload(filePath, file);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from(bucket)
+                .getPublicUrl(filePath);
+
+            handleUpdateStep(stepId, 'image_url', publicUrl);
+        } catch (error) {
+            console.error(error);
+            alert("Error al subir la imagen");
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
     const handleSave = () => {
         onSave(steps);
         onClose();
@@ -74,7 +107,7 @@ const ProcessEditorModal = ({ isOpen, onClose, initialSteps, onSave }) => {
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col bg-gray-950 border-gray-800 text-white">
                 <DialogHeader>
-                    <DialogTitle className="text-2xl font-bold text-blue-500">Editar Flujo del Proceso</DialogTitle>
+                    <DialogTitle className="text-2xl font-bold text-primary">Editar Flujo del Proceso</DialogTitle>
                 </DialogHeader>
 
                 <div className="flex-1 overflow-hidden flex gap-6 mt-4">
@@ -82,7 +115,7 @@ const ProcessEditorModal = ({ isOpen, onClose, initialSteps, onSave }) => {
                     <div className="w-1/3 flex flex-col border-r border-gray-800 pr-4">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="font-semibold text-gray-300">Pasos</h3>
-                            <Button onClick={handleAddStep} size="sm" className="bg-blue-600 hover:bg-blue-700">
+                            <Button onClick={handleAddStep} size="sm" className="bg-primary hover:bg-primary/90 text-white">
                                 <Plus className="w-4 h-4 mr-1" /> Agregar
                             </Button>
                         </div>
@@ -92,7 +125,7 @@ const ProcessEditorModal = ({ isOpen, onClose, initialSteps, onSave }) => {
                                 <div
                                     key={step.id}
                                     className={`p-3 rounded-lg border cursor-pointer transition-all flex items-center gap-2 ${editingStepId === step.id
-                                        ? 'bg-blue-900/20 border-blue-500'
+                                        ? 'bg-primary/20 border-primary'
                                         : 'bg-gray-900 border-gray-800 hover:border-gray-700'
                                         }`}
                                     onClick={() => setEditingStepId(step.id)}
@@ -152,7 +185,7 @@ const ProcessEditorModal = ({ isOpen, onClose, initialSteps, onSave }) => {
                                                     isEditorMode={true}
                                                     trigger={
                                                         <Button variant="outline" className="h-12 w-12 p-2 border-gray-700 bg-gray-900">
-                                                            <Icon className="w-full h-full text-blue-500" />
+                                                            <Icon className="w-full h-full text-primary" />
                                                         </Button>
                                                     }
                                                 />
@@ -164,6 +197,29 @@ const ProcessEditorModal = ({ isOpen, onClose, initialSteps, onSave }) => {
                                                     onChange={(e) => handleUpdateStep(step.id, 'title', e.target.value)}
                                                     className="bg-gray-900 border-gray-700"
                                                 />
+                                            </div>
+                                            <div className="flex flex-col gap-2">
+                                                <Label>Alineación</Label>
+                                                <div className="flex bg-gray-900 border border-gray-700 rounded-lg p-1.5 gap-1">
+                                                    <button
+                                                        onClick={() => handleUpdateStep(step.id, 'align', 'left')}
+                                                        className={`p-1.5 rounded transition-all ${step.align === 'left' || !step.align ? 'bg-primary text-black' : 'text-gray-500 hover:bg-gray-800'}`}
+                                                    >
+                                                        <AlignLeft size={16} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleUpdateStep(step.id, 'align', 'center')}
+                                                        className={`p-1.5 rounded transition-all ${step.align === 'center' ? 'bg-primary text-black' : 'text-gray-500 hover:bg-gray-800'}`}
+                                                    >
+                                                        <AlignCenter size={16} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleUpdateStep(step.id, 'align', 'justify')}
+                                                        className={`p-1.5 rounded transition-all ${step.align === 'justify' ? 'bg-primary text-black' : 'text-gray-500 hover:bg-gray-800'}`}
+                                                    >
+                                                        <AlignJustify size={16} />
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -194,6 +250,51 @@ const ProcessEditorModal = ({ isOpen, onClose, initialSteps, onSave }) => {
                                                 ))}
                                             </div>
                                         </div>
+
+                                        <div className="space-y-3 pt-4 border-t border-gray-800">
+                                            <Label>Imagen del Paso</Label>
+                                            <div className="flex items-start gap-4">
+                                                <div className="relative w-40 h-28 bg-gray-900 border border-gray-700 rounded-lg overflow-hidden flex items-center justify-center">
+                                                    {step.image_url ? (
+                                                        <img src={step.image_url} alt="Preview" className="w-full h-full object-contain" />
+                                                    ) : (
+                                                        <ImageIcon className="w-8 h-8 text-gray-700" />
+                                                    )}
+                                                    {isUploading && (
+                                                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                                            <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex-1 space-y-2">
+                                                    <input
+                                                        type="file"
+                                                        ref={fileInputRef}
+                                                        className="hidden"
+                                                        accept="image/*"
+                                                        onChange={(e) => handleImageUpload(step.id, e.target.files[0])}
+                                                    />
+                                                    <Button
+                                                        variant="outline"
+                                                        onClick={() => fileInputRef.current?.click()}
+                                                        disabled={isUploading}
+                                                        className="w-full border-gray-700 hover:bg-gray-800"
+                                                    >
+                                                        {step.image_url ? 'Cambiar Imagen' : 'Subir Imagen'}
+                                                    </Button>
+                                                    {step.image_url && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            className="w-full text-red-500 hover:text-red-400 hover:bg-red-500/10"
+                                                            onClick={() => handleUpdateStep(step.id, 'image_url', null)}
+                                                        >
+                                                            Eliminar Imagen
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
                                     </div>
                                 );
                             })()
@@ -209,7 +310,7 @@ const ProcessEditorModal = ({ isOpen, onClose, initialSteps, onSave }) => {
                     <Button variant="outline" onClick={onClose} className="border-gray-700 hover:bg-gray-800 text-white">
                         Cancelar
                     </Button>
-                    <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700 text-white">
+                    <Button onClick={handleSave} className="bg-primary hover:bg-primary/90 text-white">
                         Guardar Cambios
                     </Button>
                 </DialogFooter>

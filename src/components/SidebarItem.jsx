@@ -63,7 +63,7 @@ const SidebarItem = ({
   // Prioritize saved label from DB/State first (so user rename works).
   // If no saved label, try translation.
   // Fallback to ID.
-  const displayLabel = section.label || (translatedLabel !== translationKey ? translatedLabel : section.id);
+  const displayLabel = section.label || t(`sections.${section.id}`);
 
   useEffect(() => {
     setTempLabel(displayLabel);
@@ -131,7 +131,9 @@ const SidebarItem = ({
     <div className="w-full">
       <div
         className={cn(
-          "group relative flex items-center w-full cursor-pointer min-h-[40px]",
+          "group relative flex items-center w-full cursor-pointer min-h-[44px] px-3 py-1.5 rounded-lg transition-all duration-300",
+          !hasSubItems && "hover:bg-white/5",
+          isActive && !isEditorMode && !hasSubItems && "bg-white/[0.07] backdrop-blur-md border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),0_4px_12px_rgba(0,0,0,0.3)]",
           isDragging && "opacity-50"
         )}
         onClick={handleMainClick}
@@ -160,8 +162,8 @@ const SidebarItem = ({
               onClick={(e) => isEditorMode && e.stopPropagation()}
             >
               <Icon className={cn(
-                "w-5 h-5 text-primary",
-                isActive && !hasSubItems && "scale-110",
+                "w-5 h-5 transition-colors duration-200",
+                isActive ? "text-primary scale-110" : "text-gray-500 group-hover:text-primary",
                 isCollapsed && "mx-auto"
               )} />
             </div>
@@ -183,11 +185,11 @@ const SidebarItem = ({
             ) : (
               <span
                 className={cn(
-                  "block truncate text-sm transition-all duration-200 select-none hover:text-primary",
+                  "block truncate text-sm transition-all duration-200 select-none",
                   isActive
-                    ? (hasSubItems ? "font-bold text-primary" : "font-semibold text-primary")
-                    : "text-gray-300",
-                  isEditorMode && "hover:text-primary cursor-text"
+                    ? (hasSubItems ? "font-bold text-primary" : "font-semibold text-white")
+                    : "text-gray-500 group-hover:text-white",
+                  isEditorMode && "cursor-text"
                 )}
                 onDoubleClick={(e) => {
                   if (isEditorMode) {
@@ -210,11 +212,13 @@ const SidebarItem = ({
           </div>
         )}
 
-        {isActive && !isCollapsed && !isEditorMode && (
+        {isActive && !isCollapsed && !isEditorMode && !hasSubItems && (
           <motion.div
             layoutId="activeIndicator"
-            className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-l-full"
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-1.5 h-4 bg-primary rounded-full shadow-[0_0_10px_rgba(255,191,0,0.8)] z-10"
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: "spring", stiffness: 400, damping: 25 }}
           />
         )}
 
@@ -310,26 +314,16 @@ const SidebarItem = ({
   // Debugging log to verify code update and logic
   // console.log(`SidebarItem: ${section.id}, isActive: ${isActive}, hasSubItems: ${hasSubItems}`);
 
-  let containerClasses = "flex flex-col px-3 py-2 my-1 rounded-lg transition-all duration-200 border border-transparent";
-
-  // Only apply hover effect if it has NO sub-items (leaf nodes)
-  if (!hasSubItems) {
-    containerClasses += " hover:bg-gray-800/80";
-  }
-
-  // Only apply solid blue background (led-blue-box) if it's active AND has NO sub-items
-  if (isActive && !isEditorMode && !hasSubItems) {
-    containerClasses += " bg-gray-800 border-l-4 border-primary";
-  }
+  let containerClasses = "flex flex-col my-1 transition-all duration-300";
 
   // Editor mode active style
   if (isEditorMode && isActive) {
-    containerClasses += " bg-primary/10 border-primary/30";
+    containerClasses += " bg-primary/10 border-primary/30 rounded-lg";
   }
 
   // Hidden item style
   if (!isVisible && isEditorMode) {
-    containerClasses += " opacity-50 grayscale";
+    containerClasses += " opacity-40 grayscale";
   }
 
   return (
