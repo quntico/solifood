@@ -148,7 +148,7 @@ const Header = ({
                   className="absolute -bottom-1 -right-4 translate-x-full hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/80 border border-white/20 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-sm cursor-pointer select-none hover:border-primary/50 transition-colors"
                 >
                   <div className="w-2.5 h-2.5 rounded-full bg-[#39ff14] shadow-[0_0_12px_#39ff14] animate-pulse" />
-                  <span className="text-[10px] font-black text-white bg-primary/10 px-2 py-0.5 rounded border border-primary/20">VER 4.34</span>
+                  <span className="text-[10px] font-black text-white bg-primary/10 px-2 py-0.5 rounded border border-primary/20">VER 4.35</span>
                 </div>
               </div>
             )}

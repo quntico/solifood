@@ -511,7 +511,14 @@ export default function MasterPlan() {
         if (!isAdminAuthenticated) {
             setShowPasswordPrompt(true);
         } else {
-            setIsAdmin(!isAdmin);
+            const newAdminState = !isAdmin;
+            setIsAdmin(newAdminState);
+
+            // Si estamos desactivando el editor, guardamos todo preventivamente
+            if (!newAdminState) {
+                console.log("[MasterPlan] Desactivando editor, guardando cambios...");
+                saveToCloud();
+            }
         }
     };
 
@@ -585,14 +592,25 @@ export default function MasterPlan() {
             const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file);
             if (uploadError) throw uploadError;
 
-            const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filePath);
+            let updatedSections = [];
+            setSections(prev => {
+                updatedSections = prev.map(s => s.id === sectionId ? {
+                    ...s,
+                    items: s.items.map(it => it.id === itemId ? { ...it, media_url: publicUrl, media_type: mediaType } : it)
+                } : s);
+                return updatedSections;
+            });
 
-            setSections(prev => prev.map(s => s.id === sectionId ? {
-                ...s,
-                items: s.items.map(it => it.id === itemId ? { ...it, media_url: publicUrl, media_type: mediaType } : it)
-            } : s));
+            // Persistir inmediatamente después de actualizar el estado local
+            const updatedConfig = {
+                clientName, projectName, projectDesc, projectDate,
+                mpTitle, mpSubTitle, logoUrl, heroVideoUrl,
+                heroVideoIsIntegrated, heroVideoScale, heroVideoBorderRadius,
+                tableFontSize, sections: updatedSections
+            };
+            await saveToCloud(updatedConfig);
 
-            toast({ title: "Media actualizado", description: "El archivo se ha subido correctamente." });
+            toast({ title: "Media actualizado", description: "El archivo se ha subido y guardado correctamente." });
         } catch (error) {
             console.error(error);
             toast({ title: "Error", description: "No se pudo subir el archivo.", variant: "destructive" });
@@ -610,7 +628,11 @@ export default function MasterPlan() {
             if (uploadError) throw uploadError;
             const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filePath);
             updateSection(sectionId, { moduleImage: publicUrl });
-            toast({ title: "Imagen de módulo actualizada" });
+
+            // Forzar guardado inmediato para el módulo
+            saveToCloud();
+
+            toast({ title: "Imagen de módulo actualizada", description: "Cambios guardados en la nube." });
         } catch (error) {
             console.error(error);
             toast({ title: "Error", description: "No se pudo subir la imagen.", variant: "destructive" });
@@ -1067,7 +1089,7 @@ export default function MasterPlan() {
                                 <input type="file" ref={logoRef} className="hidden" accept="image/*" onChange={(e) => handleLogoUpload(e.target.files[0])} />
                             </div>
                             {!isScrolled && (
-                                <span className="text-[10px] font-black text-white bg-primary/10 px-2 py-0.5 rounded border border-primary/20 inline-block uppercase tracking-wider">VER 4.34</span>
+                                <span className="text-[10px] font-black text-white bg-primary/10 px-2 py-0.5 rounded border border-primary/20 inline-block uppercase tracking-wider">VER 4.35</span>
                             )}
                         </div>
                     </div>
