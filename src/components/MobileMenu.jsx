@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, LogOut, Shield, Calculator, Settings } from 'lucide-react';
+import { X, LogOut, Shield, Calculator, Settings, Home, Map, ChevronRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import SidebarItem from './SidebarItem';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -23,6 +24,7 @@ const MobileMenu = ({
     onAdminClick
 }) => {
     const { t } = useLanguage();
+    const navigate = useNavigate();
 
     const menuVariants = {
         closed: { x: '-100%', opacity: 0 },
@@ -109,6 +111,45 @@ const MobileMenu = ({
                                     dragHandleProps={{}}
                                 />
                             ))}
+
+                            {/* Accesos Rápidos Adicionales */}
+                            <div className="pt-6 pb-2 px-2">
+                                <div className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] mb-4 pl-1">
+                                    Navegación Global
+                                </div>
+
+                                <button
+                                    onClick={() => { navigate('/'); onClose(); }}
+                                    className="w-full flex items-center justify-between p-4 rounded-xl bg-primary/5 border border-primary/20 text-white hover:bg-primary/10 transition-all group mb-3 shadow-[0_4px_15px_rgba(0,0,0,0.2)]"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-2 bg-primary/20 rounded-lg text-primary">
+                                            <Home size={20} />
+                                        </div>
+                                        <div className="text-left">
+                                            <div className="font-bold text-sm tracking-tight">DASHBOARD</div>
+                                            <div className="text-[10px] text-gray-400 font-medium">Lista de Proyectos</div>
+                                        </div>
+                                    </div>
+                                    <ChevronRight size={18} className="text-gray-600 group-hover:text-primary transition-colors" />
+                                </button>
+
+                                <button
+                                    onClick={() => { navigate('/solifood/master-plan'); onClose(); }}
+                                    className="w-full flex items-center justify-between p-4 rounded-xl bg-zinc-900 border border-white/5 text-white hover:border-primary/30 transition-all group shadow-[0_4px_15px_rgba(0,0,0,0.2)]"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-2 bg-yellow-500/10 rounded-lg text-yellow-500">
+                                            <Map size={20} />
+                                        </div>
+                                        <div className="text-left">
+                                            <div className="font-bold text-sm tracking-tight text-yellow-500/90">MASTER PLAN</div>
+                                            <div className="text-[10px] text-gray-500 font-medium">Concentrado General</div>
+                                        </div>
+                                    </div>
+                                    <ChevronRight size={18} className="text-gray-600 group-hover:text-yellow-500 transition-colors" />
+                                </button>
+                            </div>
                         </div>
 
                         {/* Footer / Admin Controls */}
