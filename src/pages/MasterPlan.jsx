@@ -592,6 +592,8 @@ export default function MasterPlan() {
             const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file);
             if (uploadError) throw uploadError;
 
+            const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filePath);
+
             let updatedSections = [];
             setSections(prev => {
                 updatedSections = prev.map(s => s.id === sectionId ? {
@@ -1089,7 +1091,7 @@ export default function MasterPlan() {
                                 <input type="file" ref={logoRef} className="hidden" accept="image/*" onChange={(e) => handleLogoUpload(e.target.files[0])} />
                             </div>
                             {!isScrolled && (
-                                <span className="text-[10px] font-black text-white bg-primary/10 px-2 py-0.5 rounded border border-primary/20 inline-block uppercase tracking-wider">VER 4.35</span>
+                                <span className="text-[10px] font-black text-white bg-primary/10 px-2 py-0.5 rounded border border-primary/20 inline-block uppercase tracking-wider">VER 4.36</span>
                             )}
                         </div>
                     </div>
