@@ -1067,7 +1067,7 @@ export default function MasterPlan() {
                                 <input type="file" ref={logoRef} className="hidden" accept="image/*" onChange={(e) => handleLogoUpload(e.target.files[0])} />
                             </div>
                             {!isScrolled && (
-                                <span className="text-[10px] font-black text-white bg-primary/10 px-2 py-0.5 rounded border border-primary/20 inline-block">VER 4.26</span>
+                                <span className="text-[10px] font-black text-white bg-primary/10 px-2 py-0.5 rounded border border-primary/20 inline-block">VER 4.30</span>
                             )}
                         </div>
                     </div>
