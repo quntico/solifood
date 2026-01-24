@@ -11,7 +11,8 @@ import {
   MoreVertical,
   Edit2,
   ChevronRight,
-  ChevronDown
+  ChevronDown,
+  RotateCcw
 } from 'lucide-react';
 import { iconMap } from '@/lib/iconMap';
 import { cn } from '@/lib/utils';
@@ -51,7 +52,8 @@ const SidebarItem = ({
   isDragging,
   subItems,
   onSubItemSelect,
-  activeSubItemIndex
+  activeSubItemIndex,
+  onRestore
 }) => {
   const { t } = useLanguage();
   const [isEditingLabel, setIsEditingLabel] = useState(false);
@@ -91,10 +93,11 @@ const SidebarItem = ({
   }
 
   const Icon = section.icon && iconMap[section.icon] ? iconMap[section.icon] : iconMap['FileText'];
-  const isVisible = section.isVisible !== false;
+  const isVisible = section.isVisible !== false && !section._deleted;
+  const isDeleted = section._deleted === true;
 
   // FORCE UNLOCK: Always allow editing these sections regardless of DB config
-  const forceUnlockedIds = ['ia', 'layout', 'video', 'calculadora_prod'];
+  const forceUnlockedIds = ['ia', 'layout', 'video', 'calculadora_prod', 'exclusiones'];
   const isLocked = section.isLocked && !forceUnlockedIds.includes(section.id);
 
   const handleSaveLabel = () => {
@@ -236,22 +239,39 @@ const SidebarItem = ({
             </button>
 
             {/* Delete Button (Direct Access) */}
-            <button
-              onClick={onDelete}
-              className="p-1.5 hover:text-red-400 text-gray-400 transition-colors rounded-md hover:bg-white/5"
-              title="Eliminar"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            {!isDeleted ? (
+              <button
+                onClick={onDelete}
+                className="p-1.5 hover:text-red-400 text-gray-400 transition-colors rounded-md hover:bg-white/5"
+                title="Eliminar"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <button
+                onClick={onRestore}
+                className="p-1.5 hover:text-green-400 text-green-500 transition-colors rounded-md hover:bg-white/5"
+                title="Restaurar Configuración"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+            )}
 
-            {/* Visibility Toggle */}
+            {/* Visibility Toggle - ALWAYS VISIBLE */}
             <button
-              onClick={(e) => { e.stopPropagation(); onVisibilityToggle(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isDeleted) {
+                  onRestore();
+                } else {
+                  onVisibilityToggle();
+                }
+              }}
               className={cn(
                 "p-1.5 transition-colors rounded-md hover:bg-white/5",
                 isVisible ? "hover:text-primary text-gray-400" : "text-gray-600"
               )}
-              title={isVisible ? "Ocultar" : "Mostrar"}
+              title={isVisible ? "Ocultar" : "Mostrar e Inmediato"}
             >
               {isVisible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
             </button>
@@ -322,8 +342,8 @@ const SidebarItem = ({
   }
 
   // Hidden item style
-  if (!isVisible && isEditorMode) {
-    containerClasses += " opacity-40 grayscale";
+  if ((!isVisible || isDeleted) && isEditorMode) {
+    containerClasses += isDeleted ? " opacity-30 grayscale sepia bg-red-500/5" : " opacity-40 grayscale";
   }
 
   return (

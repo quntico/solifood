@@ -113,37 +113,28 @@ const ProcesoSection = ({ sectionData, isEditorMode, onContentChange }) => {
           <div className="space-y-16">
             {steps.map((step, index) => {
               const IconComponent = iconMap[step.icon] || Layers;
-              const isLeft = index % 2 === 0;
+              const isEven = index % 2 === 0;
 
               return (
                 <div key={step.id} className="grid grid-cols-[auto_1fr] sm:grid-cols-[1fr_auto_1fr] items-stretch gap-x-6 sm:gap-x-12">
                   {/* Left Column (Desktop) */}
                   <div className="hidden sm:block">
-                    {isLeft ? (
-                      <motion.div
-                        initial={{ x: -50, opacity: 0 }}
-                        whileInView={{ x: 0, opacity: 1 }}
-                        viewport={{ once: true, amount: 0.5 }}
-                        transition={{ duration: 0.6 }}
-                        className="bg-gray-900/50 p-6 rounded-xl border border-primary/40 backdrop-blur-sm shadow-[0_0_15px_hsl(var(--primary)/0.15)] hover:border-primary transition-all duration-300 hover:shadow-[0_0_30px_hsl(var(--primary)/0.3)] h-full flex flex-col justify-center"
-                      >
-                        <TimelineCardContent step={step} isLeft={isLeft} />
-                      </motion.div>
-                    ) : (
-                      step.image_url && (
-                        <motion.div
-                          initial={{ opacity: 0.4 }}
-                          whileHover={{ opacity: 1 }}
-                          className="w-full h-full min-h-[12rem] rounded-xl overflow-hidden border border-primary/20 bg-black/40 shadow-2xl transition-all duration-500"
-                        >
-                          <img
-                            src={step.image_url}
-                            alt={step.title}
-                            className="w-full h-full object-cover"
-                          />
-                        </motion.div>
-                      )
-                    )}
+                    <motion.div
+                      initial={{ x: isEven ? -50 : 50, opacity: 0 }}
+                      whileInView={{ x: 0, opacity: 1 }}
+                      viewport={{ once: true, amount: 0.5 }}
+                      transition={{ duration: 0.6 }}
+                      className={isEven
+                        ? "bg-gray-900/50 p-6 rounded-xl border border-primary/40 backdrop-blur-sm shadow-[0_0_15px_hsl(var(--primary)/0.15)] transition-all duration-300 hover:border-primary hover:shadow-[0_0_30px_hsl(var(--primary)/0.3)] h-full flex flex-col justify-center"
+                        : "h-full flex flex-col justify-center"
+                      }
+                    >
+                      {isEven ? (
+                        <TimelineCardContent step={step} index={index} onStepsChange={(newSteps) => onContentChange({ steps: newSteps })} steps={steps} isEditorMode={isEditorMode} />
+                      ) : (
+                        <StepImage step={step} isEditorMode={isEditorMode} onOpenModal={() => setIsModalOpen(true)} />
+                      )}
+                    </motion.div>
                   </div>
 
                   {/* Icon Column */}
@@ -163,6 +154,10 @@ const ProcesoSection = ({ sectionData, isEditorMode, onContentChange }) => {
                         </div>
                       )}
                     </motion.div>
+                    {/* Connective line segment for desktop */}
+                    {index < steps.length - 1 && (
+                      <div className="hidden sm:block w-0.5 h-full bg-primary/20 mt-4" />
+                    )}
                   </div>
 
                   {/* Right Column (Desktop) / Main Column (Mobile) */}
@@ -184,56 +179,44 @@ const ProcesoSection = ({ sectionData, isEditorMode, onContentChange }) => {
                         </button>
                       </div>
 
-                      {(!isLeft || (typeof window !== 'undefined' && window.innerWidth < 640)) && (
-                        <motion.div
-                          key={`${step.id}-${mobileModes[step.id] === 'image' ? 'image' : 'info'}`}
-                          initial={{ opacity: 0, x: 20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: -20 }}
-                          className="flex-1"
-                        >
-                          {/* Contenido Principal: O TEXTO O IMAGEN en Móvil */}
+                      <motion.div
+                        key={`${step.id}-${mobileModes[step.id] === 'image' ? 'image' : 'info'}`}
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        className="flex-1"
+                      >
+                        {/* Contenido Principal en Móvil: O TEXTO O IMAGEN */}
+                        <div className="sm:hidden">
                           {(!mobileModes[step.id] || mobileModes[step.id] === 'info') ? (
-                            <div className={`bg-gray-900/50 p-6 rounded-xl border border-primary/40 backdrop-blur-sm shadow-[0_0_15px_hsl(var(--primary)/0.15)] hover:border-primary transition-all duration-300 hover:shadow-[0_0_30px_hsl(var(--primary)/0.3)] h-full flex flex-col justify-center ${!isLeft ? '' : 'sm:hidden'}`}>
-                              <TimelineCardContent step={step} isLeft={isLeft} />
+                            <div className="bg-gray-900/50 p-6 rounded-xl border border-primary/40 backdrop-blur-sm shadow-[0_0_15px_hsl(var(--primary)/0.15)] hover:border-primary transition-all duration-300 hover:shadow-[0_0_30px_hsl(var(--primary)/0.3)] h-full flex flex-col justify-center">
+                              <TimelineCardContent step={step} index={index} onStepsChange={(newSteps) => onContentChange({ steps: newSteps })} steps={steps} isEditorMode={isEditorMode} />
                             </div>
                           ) : (
-                            step.image_url && (
-                              <div className="w-full h-64 rounded-xl overflow-hidden border border-primary/20 bg-black/40 shadow-xl">
-                                <img
-                                  src={step.image_url}
-                                  alt={step.title}
-                                  className="w-full h-full object-contain"
-                                />
-                              </div>
-                            )
+                            <StepImage step={step} isEditorMode={isEditorMode} onOpenModal={() => setIsModalOpen(true)} />
                           )}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                        </div>
 
-                    {/* Desktop Side Image (shown only when not current column for text) */}
-                    {isLeft && (
-                      <div className="hidden sm:block h-full">
-                        {step.image_url && (
+                        {/* Desktop Right Column Content */}
+                        <div className="hidden sm:block h-full">
                           <motion.div
-                            initial={{ opacity: 0.4 }}
+                            initial={{ opacity: 0.8 }}
                             whileHover={{ opacity: 1 }}
-                            className="w-full h-full min-h-[12rem] rounded-xl overflow-hidden border border-primary/20 bg-black/40 shadow-2xl transition-all duration-500"
+                            className={!isEven
+                              ? "bg-gray-900/50 p-6 rounded-xl border border-primary/40 backdrop-blur-sm shadow-[0_0_15px_hsl(var(--primary)/0.15)] transition-all duration-300 hover:border-primary hover:shadow-[0_0_30px_hsl(var(--primary)/0.3)] h-full flex flex-col justify-center"
+                              : "h-full flex flex-col justify-center"
+                            }
                           >
-                            <img
-                              src={step.image_url}
-                              alt={step.title}
-                              className="w-full h-full object-cover"
-                            />
+                            {!isEven ? (
+                              <TimelineCardContent step={step} index={index} onStepsChange={(newSteps) => onContentChange({ steps: newSteps })} steps={steps} isEditorMode={isEditorMode} />
+                            ) : (
+                              <StepImage step={step} isEditorMode={isEditorMode} onOpenModal={() => setIsModalOpen(true)} />
+                            )}
                           </motion.div>
-                        )}
-                      </div>
-                    )}
+                        </div>
+                      </motion.div>
+                    </AnimatePresence>
                   </div>
-
-
-
                 </div>
               );
             })}
@@ -251,8 +234,24 @@ const ProcesoSection = ({ sectionData, isEditorMode, onContentChange }) => {
   );
 };
 
-const TimelineCardContent = ({ step, isLeft }) => {
+import EditableField from '@/components/EditableField';
+
+const TimelineCardContent = ({ step, index, onStepsChange, steps, isEditorMode }) => {
   const alignment = step.align || 'left';
+
+  const handleTitleSave = (newTitle) => {
+    const newSteps = [...steps];
+    newSteps[index] = { ...step, title: newTitle };
+    onStepsChange(newSteps);
+  };
+
+  const handleDetailSave = (detailIndex, newValue) => {
+    const newSteps = [...steps];
+    const newDetails = [...step.details];
+    newDetails[detailIndex] = newValue;
+    newSteps[index] = { ...step, details: newDetails };
+    onStepsChange(newSteps);
+  };
 
   return (
     <div className="flex flex-col h-full justify-center">
@@ -260,7 +259,13 @@ const TimelineCardContent = ({ step, isLeft }) => {
         className="text-base font-bold text-white mb-4 sm:text-lg uppercase tracking-tight"
         style={{ textAlign: alignment === 'justify' ? 'left' : alignment }}
       >
-        {step.title}
+        <EditableField
+          value={step.title}
+          onSave={handleTitleSave}
+          isEditorMode={isEditorMode}
+          className="bg-transparent border-none p-0 focus:ring-0"
+          inputClassName="bg-black/40"
+        />
       </h3>
       <ul
         className="space-y-3 text-gray-400 text-sm flex flex-col"
@@ -271,10 +276,44 @@ const TimelineCardContent = ({ step, isLeft }) => {
             key={detailIndex}
             className={`leading-relaxed ${alignment === 'center' ? 'items-center' : alignment === 'right' ? 'items-end' : 'items-start'}`}
           >
-            {detail}
+            <EditableField
+              value={detail}
+              onSave={(val) => handleDetailSave(detailIndex, val)}
+              isEditorMode={isEditorMode}
+              className="bg-transparent border-none p-0 focus:ring-0"
+              inputClassName="bg-black/40"
+            />
           </li>
         ))}
       </ul>
+    </div>
+  );
+};
+
+const StepImage = ({ step, isEditorMode, onOpenModal }) => {
+  return (
+    <div className="w-full h-64 rounded-xl overflow-hidden relative group flex items-center justify-center">
+      {step.image_url ? (
+        <>
+          <img
+            src={step.image_url}
+            alt={step.title}
+            className="w-full h-full object-contain opacity-40 group-hover:opacity-100 transition-all duration-700 ease-in-out"
+          />
+          {/* LED Indicator */}
+          <div className="absolute bottom-6 right-8 w-10 h-1 bg-green-500/20 rounded-full group-hover:bg-green-400 group-hover:shadow-[0_0_10px_#4ade80] transition-all duration-700" />
+          {isEditorMode && (
+            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <Button size="sm" variant="outline" onClick={onOpenModal}>Cambiar</Button>
+            </div>
+          )}
+        </>
+      ) : isEditorMode && (
+        <div onClick={onOpenModal} className="w-full h-full border-2 border-dashed border-gray-800 bg-gray-900/20 flex flex-col items-center justify-center text-gray-500 gap-2 cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all">
+          <ImageIcon size={24} />
+          <span className="text-xs font-bold uppercase tracking-widest">Subir Imagen</span>
+        </div>
+      )}
     </div>
   );
 };

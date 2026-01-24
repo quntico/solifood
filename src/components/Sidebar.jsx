@@ -35,7 +35,8 @@ const Sidebar = ({
   onCotizadorClick,
   onSubItemSelect,
   activeTabMap,
-  onDeleteSection
+  onDeleteSection,
+  onRestoreSection
 }) => {
   const { t } = useLanguage();
   const { toast } = useToast();
@@ -181,6 +182,7 @@ const Sidebar = ({
                               onIconChange={(val) => updateSectionIcon(section.id, val)}
                               onDuplicate={(e) => { e.stopPropagation(); duplicateSection(section, index); }}
                               onDelete={(e) => { e?.stopPropagation?.(); requestDelete(section.id); }}
+                              onRestore={(e) => { e?.stopPropagation?.(); onRestoreSection && onRestoreSection(section.id); }}
 
                               isFirst={index === 0}
                               isLast={index === sections.length - 1}
@@ -205,8 +207,8 @@ const Sidebar = ({
                   </div>
                 )}
                 <button
-                  onClick={() => navigate('/solifood/master-plan')}
-                  className={`w-full flex items-center p-2 rounded-md transition-colors text-gray-400 hover:text-white hover:bg-white/5 group`}
+                  onClick={() => onSectionSelect('master_plan')}
+                  className={`w-full flex items-center p-2 rounded-md transition-colors ${activeSection === 'master_plan' ? 'bg-primary/20 text-primary' : 'text-gray-400 hover:text-white hover:bg-white/5'} group`}
                 >
                   <div className="flex-shrink-0">
                     <Map size={20} className="group-hover:text-primary transition-colors" />
@@ -219,7 +221,7 @@ const Sidebar = ({
 
               {!isCollapsed && (
                 <div className="px-6 py-4 mt-auto">
-                  <span className="text-[10px] font-black text-primary/40">v4.37</span>
+                  <span className="text-[10px] font-black text-primary/40">v5.04</span>
                 </div>
               )}
             </nav>

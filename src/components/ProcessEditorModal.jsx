@@ -25,10 +25,12 @@ const ProcessEditorModal = ({ isOpen, onClose, initialSteps, onSave }) => {
         if (direction === 'up' && index === 0) return;
         if (direction === 'down' && index === steps.length - 1) return;
 
-        const newSteps = [...steps];
-        const targetIndex = direction === 'up' ? index - 1 : index + 1;
-        [newSteps[index], newSteps[targetIndex]] = [newSteps[targetIndex], newSteps[index]];
-        setSteps(newSteps);
+        setSteps(prev => {
+            const newSteps = [...prev];
+            const targetIndex = direction === 'up' ? index - 1 : index + 1;
+            [newSteps[index], newSteps[targetIndex]] = [newSteps[targetIndex], newSteps[index]];
+            return newSteps;
+        });
     };
 
     const handleAddStep = () => {
@@ -39,17 +41,17 @@ const ProcessEditorModal = ({ isOpen, onClose, initialSteps, onSave }) => {
             align: 'left',
             details: ['- Detalle 1', '- Detalle 2']
         };
-        setSteps([...steps, newStep]);
+        setSteps(prev => [...prev, newStep]);
         setEditingStepId(newStep.id);
     };
 
     const handleDeleteStep = (id) => {
-        setSteps(steps.filter(s => s.id !== id));
+        setSteps(prev => prev.filter(s => s.id !== id));
         if (editingStepId === id) setEditingStepId(null);
     };
 
     const handleUpdateStep = (id, field, value) => {
-        setSteps(steps.map(s => s.id === id ? { ...s, [field]: value } : s));
+        setSteps(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
     };
 
     const handleDetailChange = (stepId, index, value) => {

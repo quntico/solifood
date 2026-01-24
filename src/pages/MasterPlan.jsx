@@ -21,7 +21,7 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 
 const STORAGE_KEY = "solifood_masterplan_v1_autonomo";
-const DEFAULT_CLOUD_SLUG = "master-plan";
+const DEFAULT_CLOUD_SLUG = "master-plan-concentrado";
 
 const STICKY_OFFSETS = {
     header_compact: 64, // Height of the slim main header
@@ -141,9 +141,9 @@ const initialSections = [
     },
 ];
 
-export default function MasterPlan() {
-    const { slug } = useParams();
-    const CLOUD_SLUG = slug || DEFAULT_CLOUD_SLUG;
+export default function MasterPlan({ slug: propSlug, legacySlug, isSubmenuMode = false, isAdmin: propIsAdmin, isAdminAuthenticated: propIsAdminAuth }) {
+    const { slug: paramsSlug } = useParams();
+    const CLOUD_SLUG = propSlug || paramsSlug || DEFAULT_CLOUD_SLUG;
     const navigate = useNavigate();
     const { toast } = useToast();
     const [horasDia, setHorasDia] = useState(16);
@@ -235,6 +235,14 @@ export default function MasterPlan() {
             return parsed?.length ? parsed : initialSections;
         } catch { return initialSections; }
     });
+
+    useEffect(() => {
+        if (propIsAdmin !== undefined) setIsAdmin(propIsAdmin);
+    }, [propIsAdmin]);
+
+    useEffect(() => {
+        if (propIsAdminAuth !== undefined) setIsAdminAuthenticated(propIsAdminAuth);
+    }, [propIsAdminAuth]);
 
     useEffect(() => {
         if (!isHydrated) return; // Prevent saving until we have fetched or decided we are the source of truth
@@ -433,9 +441,34 @@ export default function MasterPlan() {
         }
     };
 
+    const importLegacyData = async () => {
+        if (!legacySlug) return;
+        setIsCloudSyncing(true);
+        try {
+            const { data, error } = await supabase
+                .from('quotations')
+                .select('*')
+                .eq('slug', legacySlug)
+                .single();
+
+            if (data && !error) {
+                const config = data.sections_config || {};
+                const sectionsToSet = Array.isArray(config.sections) ? config.sections : (Array.isArray(config) ? config : null);
+                if (sectionsToSet) {
+                    setSections(sectionsToSet);
+                    toast({ title: "Datos Recuperados", description: "Se han importado los datos del Master Plan General." });
+                }
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsCloudSyncing(false);
+        }
+    };
+
     useEffect(() => {
         fetchCloudData();
-    }, []);
+    }, [CLOUD_SLUG]);
 
     const handleSavePdfSettings = (newSettings, newClient, newProject, pdfLogoUrl) => {
         // 1. Update LOCAL React state instantly
@@ -594,26 +627,24 @@ export default function MasterPlan() {
 
             const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filePath);
 
-            // CALCULAMOS EL NUEVO ESTADO PRIMERO (Seguridad total v4.37)
-            setSections(prev => {
-                const nextSections = prev.map(s => s.id === sectionId ? {
-                    ...s,
-                    items: s.items.map(it => it.id === itemId ? { ...it, media_url: publicUrl, media_type: mediaType } : it)
-                } : s);
+            // SEGURIDAD DETERMINÍSTICA v4.39
+            // 1. Calculamos el nuevo estado basado en el estado ACTUAL síncronamente
+            const nextSections = sections.map(s => s.id === sectionId ? {
+                ...s,
+                items: s.items.map(it => it.id === itemId ? { ...it, media_url: publicUrl, media_type: mediaType } : it)
+            } : s);
 
-                // Disparamos el guardado con la configuración RECIÉN CALCULADA
-                const updatedConfig = {
-                    clientName, projectName, projectDesc, projectDate,
-                    mpTitle, mpSubTitle, logoUrl, heroVideoUrl,
-                    heroVideoIsIntegrated, heroVideoScale, heroVideoBorderRadius,
-                    tableFontSize, sections: nextSections
-                };
+            // 2. Actualizamos el estado de React
+            setSections(nextSections);
 
-                // Sincronización en segundo plano con los datos correctos
-                saveToCloud(updatedConfig);
-
-                return nextSections;
-            });
+            // 3. Persistimos a la nube usando el NUEVO estado que acabamos de calcular
+            const updatedConfig = {
+                clientName, projectName, projectDesc, projectDate,
+                mpTitle, mpSubTitle, logoUrl, heroVideoUrl,
+                heroVideoIsIntegrated, heroVideoScale, heroVideoBorderRadius,
+                tableFontSize, sections: nextSections
+            };
+            await saveToCloud(updatedConfig);
 
             toast({ title: "Media actualizado", description: "El archivo se ha subido y guardado correctamente." });
         } catch (error) {
@@ -632,10 +663,17 @@ export default function MasterPlan() {
             const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file);
             if (uploadError) throw uploadError;
             const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filePath);
-            updateSection(sectionId, { moduleImage: publicUrl });
+            // SEGURIDAD DETERMINÍSTICA v4.39
+            const nextSections = sections.map(s => s.id === sectionId ? { ...s, moduleImage: publicUrl } : s);
+            setSections(nextSections);
 
-            // Forzar guardado inmediato para el módulo
-            saveToCloud();
+            const updatedConfig = {
+                clientName, projectName, projectDesc, projectDate,
+                mpTitle, mpSubTitle, logoUrl, heroVideoUrl,
+                heroVideoIsIntegrated, heroVideoScale, heroVideoBorderRadius,
+                tableFontSize, sections: nextSections
+            };
+            await saveToCloud(updatedConfig);
 
             toast({ title: "Imagen de módulo actualizada", description: "Cambios guardados en la nube." });
         } catch (error) {
@@ -754,6 +792,17 @@ export default function MasterPlan() {
         setTargetAmountModalOpen(false);
         saveToCloud(newSections);
         toast({ title: "Ajuste Masivo Aplicado y Guardado", description: `Se calculó una utilidad de ${finalUtil}% y se sincronizó con la nube.` });
+    };
+
+    const justifyAllDescriptions = () => {
+        if (!window.confirm("¿Deseas JUSTIFICAR el texto de TODAS las descripciones de los equipos?")) return;
+        const nextSections = sections.map(s => ({
+            ...s,
+            items: s.items.map(it => ({ ...it, descAlign: "justify" }))
+        }));
+        setSections(nextSections);
+        saveToCloud({ ...sections, sections: nextSections });
+        toast({ title: "Texto Justificado", description: "Se ha aplicado justificación a todas las descripciones del proyecto." });
     };
 
     const handleExportPDF = () => {
@@ -1072,219 +1121,231 @@ export default function MasterPlan() {
     };
 
     return (
-        <div className="min-h-screen bg-black text-white px-8 md:px-16 lg:px-32 py-12 pb-32 bg-[url('https://horizons-cdn.hostinger.com/0f98fff3-e5cd-4ceb-b0fd-55d6f1d7dd5c/dcea69d21f8fa04833cff852034084fb.png')] bg-cover bg-fixed bg-center relative">
+        <div className={`min-h-screen bg-black text-white px-4 md:px-8 lg:px-16 py-12 pb-32 relative ${!isSubmenuMode ? "bg-[url('https://horizons-cdn.hostinger.com/0f98fff3-e5cd-4ceb-b0fd-55d6f1d7dd5c/dcea69d21f8fa04833cff852034084fb.png')] bg-cover bg-fixed bg-center" : ""}`}>
             <div className="absolute inset-0 bg-black/90 backdrop-blur-[2px] z-0" />
 
             <div className={`relative z-[100] w-full max-w-[1920px] mx-auto transition-all duration-500 ${isScrolled ? 'pt-24' : ''}`}>
                 {/* Header Container */}
-                <div className={`flex flex-col md:flex-row items-center justify-between gap-8 mb-12 bg-zinc-950/40 p-8 rounded-[2.5rem] border border-white/5 backdrop-blur-xl transition-all duration-500 group/header ${isScrolled ? 'fixed top-4 left-8 right-8 md:left-16 md:right-16 lg:left-32 lg:right-32 z-[200] !p-3 !mb-0 !gap-4 !rounded-2xl shadow-2xl scale-[0.98] border-white/20 !bg-zinc-950/50 backdrop-blur-3xl ring-1 ring-white/10' : 'relative z-[100]'}`}>
-                    {/* Left side */}
-                    <div className={`flex items-center gap-6 flex-1 justify-start transition-all duration-500 ${isScrolled ? '!gap-3' : ''}`}>
-                        <button onClick={() => navigate('/')} className={`p-3 rounded-full bg-white/5 hover:bg-primary hover:text-black text-gray-400 transition-all group/back ${isScrolled ? '!p-2' : ''}`}>
-                            <X size={isScrolled ? 18 : 24} className="group-hover:rotate-90 transition-transform" />
-                        </button>
-                        <div className="flex flex-col gap-1">
-                            <div className={`relative group/logo ${isAdmin ? 'cursor-pointer' : ''}`} onClick={() => isAdmin && logoRef.current?.click()}>
-                                <img src={logoUrl || "/solifood-logo.png"} alt="Logo" className={`object-contain transition-all duration-500 ${isScrolled ? 'h-10' : 'h-24'}`} />
-                                {isAdmin && (
-                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/logo:opacity-100 transition-opacity rounded-lg">
-                                        {uploadingId === 'logo' ? <Loader2 size={16} className="text-white animate-spin" /> : <Camera size={16} className="text-white" />}
-                                    </div>
+                {!isSubmenuMode && (
+                    <div className={`flex flex-col md:flex-row items-center justify-between gap-8 mb-12 bg-zinc-950/40 p-8 rounded-[2.5rem] border border-white/5 backdrop-blur-xl transition-all duration-500 group/header ${isScrolled ? 'fixed top-4 left-8 right-8 md:left-16 md:right-16 lg:left-32 lg:right-32 z-[200] !p-3 !mb-0 !gap-4 !rounded-2xl shadow-2xl scale-[0.98] border-white/20 !bg-zinc-950/50 backdrop-blur-3xl ring-1 ring-white/10' : 'relative z-[100]'}`}>
+                        {/* Left side */}
+                        <div className={`flex items-center gap-6 flex-1 justify-start transition-all duration-500 ${isScrolled ? '!gap-3' : ''}`}>
+                            <button onClick={() => navigate('/')} className={`p-3 rounded-full bg-white/5 hover:bg-primary hover:text-black text-gray-400 transition-all group/back ${isScrolled ? '!p-2' : ''}`}>
+                                <X size={isScrolled ? 18 : 24} className="group-hover:rotate-90 transition-transform" />
+                            </button>
+                            <div className="flex flex-col gap-1">
+                                <div className={`relative group/logo ${isAdmin ? 'cursor-pointer' : ''}`} onClick={() => isAdmin && logoRef.current?.click()}>
+                                    <img src={logoUrl || "/solifood-logo.png"} alt="Logo" className={`object-contain transition-all duration-500 ${isScrolled ? 'h-10' : 'h-24'}`} />
+                                    {isAdmin && (
+                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/logo:opacity-100 transition-opacity rounded-lg">
+                                            {uploadingId === 'logo' ? <Loader2 size={16} className="text-white animate-spin" /> : <Camera size={16} className="text-white" />}
+                                        </div>
+                                    )}
+                                    <input type="file" ref={logoRef} className="hidden" accept="image/*" onChange={(e) => handleLogoUpload(e.target.files[0])} />
+                                </div>
+                                {!isScrolled && (
+                                    <span className="text-[10px] font-black text-white bg-primary/10 px-2 py-0.5 rounded border border-primary/20 inline-block uppercase tracking-wider">VER 4.45</span>
                                 )}
-                                <input type="file" ref={logoRef} className="hidden" accept="image/*" onChange={(e) => handleLogoUpload(e.target.files[0])} />
+                            </div>
+                        </div>
+
+                        {/* Center side */}
+                        <div className={`flex flex-col items-center text-center transition-all duration-500 ${isScrolled ? 'flex-row gap-4 items-center flex-[3]' : 'flex-[2]'}`}>
+                            <div className={`w-full flex flex-col items-center relative transition-all duration-500 ${isScrolled ? '!w-auto !items-start' : 'mb-2'}`}>
+                                {isAdmin ? (
+                                    <input value={mpSubTitle} onChange={(e) => setMpSubTitle(e.target.value.toUpperCase())} className={`bg-transparent border-b border-primary/30 text-xs font-black text-primary uppercase tracking-[0.4em] text-center w-full max-w-sm mb-1 ${isScrolled ? '!text-[10px] !mb-0 !text-left' : ''}`} />
+                                ) : (
+                                    !isScrolled && <span className="text-xs font-black text-primary uppercase tracking-[0.4em] opacity-80">{mpSubTitle}</span>
+                                )}
+                                <h1 className={`font-black tracking-tighter uppercase leading-none mt-1 transition-all duration-500 ${isScrolled ? 'text-2xl !mt-0' : 'text-4xl md:text-6xl'}`}>
+                                    {isAdmin ? (
+                                        <><span className="text-white">MASTER</span> <span className="text-primary">EDITOR</span></>
+                                    ) : (
+                                        <><span className="text-white">MASTER</span> <span className="text-primary">PLAN</span></>
+                                    )}
+                                </h1>
                             </div>
                             {!isScrolled && (
-                                <span className="text-[10px] font-black text-white bg-primary/10 px-2 py-0.5 rounded border border-primary/20 inline-block uppercase tracking-wider">VER 4.37</span>
+                                <div className="flex flex-wrap justify-center gap-8 mt-6 text-[11px] font-black border-t border-white/10 pt-6 w-full tracking-[0.15em] uppercase">
+                                    <div className="flex items-center gap-2.5 group/meta">
+                                        <Briefcase size={14} className="text-primary drop-shadow-[0_0_8px_rgba(250,204,21,0.4)]" />
+                                        <span className="text-gray-400">PROJECT:</span>
+                                        <span className="text-white text-xs">{projectName}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2.5 group/meta">
+                                        <User size={14} className="text-primary drop-shadow-[0_0_8px_rgba(250,204,21,0.4)]" />
+                                        <span className="text-gray-400">CLIENT:</span>
+                                        <span className="text-white text-xs">{clientName}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2.5 group/meta">
+                                        <Calendar size={14} className="text-primary drop-shadow-[0_0_8px_rgba(250,204,21,0.4)]" />
+                                        <span className="text-gray-400">DATE:</span>
+                                        <span className="text-white text-xs">{projectDate}</span>
+                                    </div>
+                                </div>
+                            )}
+                            {!isScrolled && <p className="text-gray-400 text-[11px] font-bold mt-4 uppercase tracking-widest opacity-80 max-w-xl leading-relaxed">{projectDesc}</p>}
+                            {isAdmin && importedFileName && (
+                                <div className="mt-2 px-3 py-1 bg-white/5 border border-white/10 rounded-full w-fit flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                                    <span className="text-[9px] font-mono font-black text-gray-400 uppercase tracking-widest">Archivo: {importedFileName}</span>
+                                </div>
                             )}
                         </div>
-                    </div>
 
-                    {/* Center side */}
-                    <div className={`flex flex-col items-center text-center transition-all duration-500 ${isScrolled ? 'flex-row gap-4 items-center flex-[3]' : 'flex-[2]'}`}>
-                        <div className={`w-full flex flex-col items-center relative transition-all duration-500 ${isScrolled ? '!w-auto !items-start' : 'mb-2'}`}>
-                            {isAdmin ? (
-                                <input value={mpSubTitle} onChange={(e) => setMpSubTitle(e.target.value.toUpperCase())} className={`bg-transparent border-b border-primary/30 text-xs font-black text-primary uppercase tracking-[0.4em] text-center w-full max-w-sm mb-1 ${isScrolled ? '!text-[10px] !mb-0 !text-left' : ''}`} />
-                            ) : (
-                                !isScrolled && <span className="text-xs font-black text-primary uppercase tracking-[0.4em] opacity-80">{mpSubTitle}</span>
-                            )}
-                            <h1 className={`font-black tracking-tighter uppercase leading-none mt-1 transition-all duration-500 ${isScrolled ? 'text-2xl !mt-0' : 'text-4xl md:text-6xl'}`}>
-                                {isAdmin ? (
-                                    <><span className="text-white">MASTER</span> <span className="text-primary">EDITOR</span></>
-                                ) : (
-                                    <><span className="text-white">MASTER</span> <span className="text-primary">PLAN</span></>
-                                )}
-                            </h1>
-                        </div>
-                        {!isScrolled && (
-                            <div className="flex flex-wrap justify-center gap-8 mt-6 text-[11px] font-black border-t border-white/10 pt-6 w-full tracking-[0.15em] uppercase">
-                                <div className="flex items-center gap-2.5 group/meta">
-                                    <Briefcase size={14} className="text-primary drop-shadow-[0_0_8px_rgba(250,204,21,0.4)]" />
-                                    <span className="text-gray-400">PROJECT:</span>
-                                    <span className="text-white text-xs">{projectName}</span>
-                                </div>
-                                <div className="flex items-center gap-2.5 group/meta">
-                                    <User size={14} className="text-primary drop-shadow-[0_0_8px_rgba(250,204,21,0.4)]" />
-                                    <span className="text-gray-400">CLIENT:</span>
-                                    <span className="text-white text-xs">{clientName}</span>
-                                </div>
-                                <div className="flex items-center gap-2.5 group/meta">
-                                    <Calendar size={14} className="text-primary drop-shadow-[0_0_8px_rgba(250,204,21,0.4)]" />
-                                    <span className="text-gray-400">DATE:</span>
-                                    <span className="text-white text-xs">{projectDate}</span>
-                                </div>
-                            </div>
-                        )}
-                        {!isScrolled && <p className="text-gray-400 text-[11px] font-bold mt-4 uppercase tracking-widest opacity-80 max-w-xl leading-relaxed">{projectDesc}</p>}
-                        {isAdmin && importedFileName && (
-                            <div className="mt-2 px-3 py-1 bg-white/5 border border-white/10 rounded-full w-fit flex items-center gap-2">
-                                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                                <span className="text-[9px] font-mono font-black text-gray-400 uppercase tracking-widest">Archivo: {importedFileName}</span>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Right side */}
-                    <div className={`flex flex-wrap items-center justify-end gap-3 flex-1 transition-all duration-500 ${isScrolled ? '!gap-2' : ''}`}>
-                        <button onClick={toggleAdmin} className={`px-4 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all relative z-[110] active:scale-95 ${isAdmin ? 'border-red-500/50 bg-red-500/10 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 shadow-[0_0_15px_rgba(250,204,21,0.1)]'} ${isScrolled ? '!px-3 !py-1.5 !text-[9px]' : ''}`}>
-                            {isAdminAuthenticated ? (isAdmin ? (isScrolled ? <Lock size={12} /> : "DESACTIVAR EDITOR") : (isScrolled ? <Edit size={12} /> : "ACTIVAR EDITOR")) : (isScrolled ? <Shield size={12} /> : "ACTIVAR EDITOR")}
-                        </button>
-
-                        {isAdmin && (
-                            <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl p-1 shadow-inner">
-                                <div className="flex items-center gap-2 px-2 border-r border-white/5">
-                                    <span className="text-[8px] font-black text-gray-500 uppercase tracking-tighter">UTILIDAD GLOBAL:</span>
-                                    <input
-                                        type="number"
-                                        value={globalUtilVal}
-                                        onChange={(e) => setGlobalUtilVal(e.target.value)}
-                                        className="w-12 bg-black/40 border-none text-[10px] font-black text-center text-primary rounded focus:ring-1 focus:ring-primary/40 focus:outline-none"
-                                    />
-                                    <span className="text-[10px] font-black text-primary">%</span>
-                                </div>
-                                <button
-                                    onClick={applyGlobalUtility}
-                                    className="px-3 py-1.5 text-[8px] font-black text-white bg-primary/20 hover:bg-primary/40 rounded-lg transition-all uppercase tracking-widest border border-primary/20"
-                                >
-                                    Aplicar Todo
-                                </button>
-                            </div>
-                        )}
-                        {isAdmin && (
-                            <button
-                                onClick={toggleColsLocked}
-                                className={`px-4 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2 ${colsLocked ? 'border-amber-500/50 bg-amber-500/10 text-amber-500' : 'border-blue-500/50 bg-blue-500/10 text-blue-500'}`}
-                                title={colsLocked ? "Desbloquear celdas" : "Bloquear celdas"}
-                            >
-                                {colsLocked ? <Lock size={12} /> : <Unlock size={12} />}
-                                {colsLocked ? "Bloqueado" : "Ajuste Libre"}
+                        {/* Right side */}
+                        <div className={`flex flex-wrap items-center justify-end gap-3 flex-1 transition-all duration-500 ${isScrolled ? '!gap-2' : ''}`}>
+                            <button onClick={toggleAdmin} className={`px-4 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all relative z-[110] active:scale-95 ${isAdmin ? 'border-red-500/50 bg-red-500/10 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 shadow-[0_0_15px_rgba(250,204,21,0.1)]'} ${isScrolled ? '!px-3 !py-1.5 !text-[9px]' : ''}`}>
+                                {isAdminAuthenticated ? (isAdmin ? (isScrolled ? <Lock size={12} /> : "DESACTIVAR EDITOR") : (isScrolled ? <Edit size={12} /> : "ACTIVAR EDITOR")) : (isScrolled ? <Shield size={12} /> : "ACTIVAR EDITOR")}
                             </button>
-                        )}
-                        {isAdmin && (
-                            <button
-                                onClick={() => {
-                                    setTargetAmountValue(grandTotals.totalVenta.toFixed(2));
-                                    setTargetAmountModalOpen(true);
-                                }}
-                                className="px-4 py-2 rounded-xl border border-primary/50 bg-primary/20 text-white text-[10px] font-black tracking-widest uppercase hover:bg-primary/30 transition-all flex items-center gap-2"
-                            >
-                                <ChevronsDown size={14} className="text-primary" />
-                                Ajuste por Monto
-                            </button>
-                        )}
-                        {isAdmin && (
-                            <button
-                                onClick={() => saveToCloud()}
-                                disabled={isCloudSyncing}
-                                className={`px-4 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2 ${isCloudSyncing ? 'bg-zinc-800 text-zinc-500 border-zinc-700' : 'border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'}`}
-                            >
-                                {isCloudSyncing ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                                {isCloudSyncing ? "Guardando..." : "Guardar en Nube"}
-                            </button>
-                        )}
-                        <Dialog open={targetAmountModalOpen} onOpenChange={setTargetAmountModalOpen}>
-                            <DialogContent className="max-w-md bg-zinc-950 border border-primary/30 text-white rounded-3xl p-8 shadow-[0_0_50px_rgba(250,204,21,0.1)]">
-                                <DialogHeader className="mb-6">
-                                    <DialogTitle className="text-2xl font-black text-primary uppercase tracking-tighter flex items-center gap-3">
-                                        <div className="p-2 rounded-xl bg-primary/10">
-                                            <Check size={24} />
-                                        </div>
-                                        Ajuste por Monto Objetivo
-                                    </DialogTitle>
-                                </DialogHeader>
-                                <div className="space-y-6">
-                                    <p className="text-zinc-400 text-xs font-bold leading-relaxed uppercase tracking-wider">
-                                        Ingresa el monto total deseado para el proyecto. El sistema calculará y aplicará automáticamente la utilidad necesaria a todos los ítems.
-                                    </p>
 
-                                    <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-4">
-                                        <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                                            <span>Venta Actual Total:</span>
-                                            <span className="text-primary">{money(grandTotals.totalVenta)}</span>
-                                        </div>
+                            {isAdmin && (
+                                <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl p-1 shadow-inner">
+                                    <div className="flex items-center gap-2 px-2 border-r border-white/5">
+                                        <span className="text-[8px] font-black text-gray-500 uppercase tracking-tighter">UTILIDAD GLOBAL:</span>
+                                        <input
+                                            type="number"
+                                            value={globalUtilVal}
+                                            onChange={(e) => setGlobalUtilVal(e.target.value)}
+                                            className="w-12 bg-black/40 border-none text-[10px] font-black text-center text-primary rounded focus:ring-1 focus:ring-primary/40 focus:outline-none"
+                                        />
+                                        <span className="text-[10px] font-black text-primary">%</span>
                                     </div>
-
-                                    <div className="space-y-3">
-                                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Monto Objetivo (USD)</label>
-                                        <div className="relative group">
-                                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black">$</div>
-                                            <input
-                                                type="number"
-                                                value={targetAmountValue}
-                                                onChange={(e) => setTargetAmountValue(e.target.value)}
-                                                className="w-full bg-zinc-900/50 border border-white/10 rounded-2xl py-4 pl-8 pr-4 text-2xl font-black text-white focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 transition-all"
-                                                placeholder="0.00"
-                                            />
-                                        </div>
-                                    </div>
-
                                     <button
-                                        onClick={applyTargetAmountAdjustment}
-                                        className="w-full py-4 rounded-2xl bg-primary text-black font-black uppercase tracking-[0.2em] text-xs hover:bg-yellow-400 active:scale-[0.98] transition-all shadow-[0_10px_20px_rgba(250,204,21,0.2)]"
+                                        onClick={applyGlobalUtility}
+                                        className="px-3 py-1.5 text-[8px] font-black text-white bg-primary/20 hover:bg-primary/40 rounded-lg transition-all uppercase tracking-widest border border-primary/20"
                                     >
-                                        Aplicar Ajuste Global
+                                        Aplicar Todo
                                     </button>
                                 </div>
-                            </DialogContent>
-                        </Dialog>
-                        <Dialog open={isParamsModalOpen} onOpenChange={setIsParamsModalOpen}>
-                            <DialogTrigger asChild>
-                                <button className="px-4 py-2 rounded-xl bg-primary/10 border border-primary/30 text-primary font-black text-[10px] tracking-widest uppercase flex items-center gap-2"><Settings size={14} /> Ajustes Iniciales</button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-4xl max-h-[90vh] bg-black border border-white/20 text-white rounded-3xl overflow-hidden p-8">
-                                <DialogHeader className="mb-8">
-                                    <DialogTitle className="text-3xl font-black text-primary uppercase tracking-tighter">Configuración</DialogTitle>
-                                </DialogHeader>
-                                <div className="space-y-10 overflow-y-auto max-h-[60vh] pr-4 custom-scrollbar">
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                                        <Field label="Horas/día" value={horasDia} onChange={setHorasDia} />
-                                        <Field label="Tipo Cambio" value={tipoCambio} onChange={setTipoCambio} />
-                                        <Field label="IVA %" value={ivaPct} onChange={setIvaPct} />
-                                    </div>
+                            )}
+                            {isAdmin && (
+                                <button
+                                    onClick={toggleColsLocked}
+                                    className={`px-4 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2 ${colsLocked ? 'border-amber-500/50 bg-amber-500/10 text-amber-500' : 'border-blue-500/50 bg-blue-500/10 text-blue-500'}`}
+                                    title={colsLocked ? "Desbloquear celdas" : "Bloquear celdas"}
+                                >
+                                    {colsLocked ? <Lock size={12} /> : <Unlock size={12} />}
+                                    {colsLocked ? "Bloqueado" : "Ajuste Libre"}
+                                </button>
+                            )}
+                            {isAdmin && (
+                                <button
+                                    onClick={() => {
+                                        setTargetAmountValue(grandTotals.totalVenta.toFixed(2));
+                                        setTargetAmountModalOpen(true);
+                                    }}
+                                    className="px-4 py-2 rounded-xl border border-primary/50 bg-primary/20 text-white text-[10px] font-black tracking-widest uppercase hover:bg-primary/30 transition-all flex items-center gap-2"
+                                >
+                                    <ChevronsDown size={14} className="text-primary" />
+                                    Ajuste por Monto
+                                </button>
+                            )}
+                            {isAdmin && (
+                                <button
+                                    onClick={justifyAllDescriptions}
+                                    className="px-4 py-2 rounded-xl border border-primary/30 bg-primary/5 text-primary text-[10px] font-black tracking-widest uppercase hover:bg-primary/20 transition-all flex items-center gap-2"
+                                    title="Justificar todas las descripciones"
+                                >
+                                    <AlignJustify size={14} />
+                                    Justificar Todo
+                                </button>
+                            )}
+                            {isAdmin && (
+                                <button
+                                    onClick={() => saveToCloud()}
+                                    disabled={isCloudSyncing}
+                                    className={`px-4 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2 ${isCloudSyncing ? 'bg-zinc-800 text-zinc-500 border-zinc-700' : 'border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'}`}
+                                >
+                                    {isCloudSyncing ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                                    {isCloudSyncing ? "Guardando..." : "Guardar en Nube"}
+                                </button>
+                            )}
+                            <Dialog open={targetAmountModalOpen} onOpenChange={setTargetAmountModalOpen}>
+                                <DialogContent className="max-w-md bg-zinc-950 border border-primary/30 text-white rounded-3xl p-8 shadow-[0_0_50px_rgba(250,204,21,0.1)]">
+                                    <DialogHeader className="mb-6">
+                                        <DialogTitle className="text-2xl font-black text-primary uppercase tracking-tighter flex items-center gap-3">
+                                            <div className="p-2 rounded-xl bg-primary/10">
+                                                <Check size={24} />
+                                            </div>
+                                            Ajuste por Monto Objetivo
+                                        </DialogTitle>
+                                    </DialogHeader>
                                     <div className="space-y-6">
-                                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Estética de Tabla</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white/5 p-6 rounded-2xl border border-white/10">
-                                            <div className="space-y-4">
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Tamaño de Fuente: {tableFontSize}px</span>
+                                        <p className="text-zinc-400 text-xs font-bold leading-relaxed uppercase tracking-wider">
+                                            Ingresa el monto total deseado para el proyecto. El sistema calculará y aplicará automáticamente la utilidad necesaria a todos los ítems.
+                                        </p>
+
+                                        <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-4">
+                                            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                                                <span>Venta Actual Total:</span>
+                                                <span className="text-primary">{money(grandTotals.totalVenta)}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Monto Objetivo (USD)</label>
+                                            <div className="relative group">
+                                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black">$</div>
+                                                <input
+                                                    type="number"
+                                                    value={targetAmountValue}
+                                                    onChange={(e) => setTargetAmountValue(e.target.value)}
+                                                    className="w-full bg-zinc-900/50 border border-white/10 rounded-2xl py-4 pl-8 pr-4 text-2xl font-black text-white focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 transition-all"
+                                                    placeholder="0.00"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            onClick={applyTargetAmountAdjustment}
+                                            className="w-full py-4 rounded-2xl bg-primary text-black font-black uppercase tracking-[0.2em] text-xs hover:bg-yellow-400 active:scale-[0.98] transition-all shadow-[0_10px_20px_rgba(250,204,21,0.2)]"
+                                        >
+                                            Aplicar Ajuste Global
+                                        </button>
+                                    </div>
+                                </DialogContent>
+                            </Dialog>
+                            <Dialog open={isParamsModalOpen} onOpenChange={setIsParamsModalOpen}>
+                                <DialogTrigger asChild>
+                                    <button className="px-4 py-2 rounded-xl bg-primary/10 border border-primary/30 text-primary font-black text-[10px] tracking-widest uppercase flex items-center gap-2"><Settings size={14} /> Ajustes Iniciales</button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-4xl max-h-[90vh] bg-black border border-white/20 text-white rounded-3xl overflow-hidden p-8">
+                                    <DialogHeader className="mb-8">
+                                        <DialogTitle className="text-3xl font-black text-primary uppercase tracking-tighter">Configuración</DialogTitle>
+                                    </DialogHeader>
+                                    <div className="space-y-10 overflow-y-auto max-h-[60vh] pr-4 custom-scrollbar">
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                            <Field label="Horas/día" value={horasDia} onChange={setHorasDia} />
+                                            <Field label="Tipo Cambio" value={tipoCambio} onChange={setTipoCambio} />
+                                            <Field label="IVA %" value={ivaPct} onChange={setIvaPct} />
+                                        </div>
+                                        <div className="space-y-6">
+                                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Estética de Tabla</h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white/5 p-6 rounded-2xl border border-white/10">
+                                                <div className="space-y-4">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Tamaño de Fuente: {tableFontSize}px</span>
+                                                    </div>
+                                                    <Slider value={[tableFontSize]} onValueChange={([v]) => setTableFontSize(v)} min={8} max={24} step={1} />
                                                 </div>
-                                                <Slider value={[tableFontSize]} onValueChange={([v]) => setTableFontSize(v)} min={8} max={24} step={1} />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-6">
+                                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Hero Video Config</h4>
+                                            <div className="flex items-center gap-4 bg-white/5 p-4 rounded-xl border border-white/10">
+                                                <span className="text-xs font-bold text-gray-400 uppercase">Input Video:</span>
+                                                <input type="file" ref={heroVideoInputRef} className="hidden" onChange={(e) => handleHeroVideoUpload(e.target.files[0])} />
+                                                <button onClick={() => heroVideoInputRef.current.click()} className="px-3 py-1 bg-blue-500 text-white rounded text-[10px] font-bold uppercase tracking-widest">Subir</button>
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="space-y-6">
-                                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Hero Video Config</h4>
-                                        <div className="flex items-center gap-4 bg-white/5 p-4 rounded-xl border border-white/10">
-                                            <span className="text-xs font-bold text-gray-400 uppercase">Input Video:</span>
-                                            <input type="file" ref={heroVideoInputRef} className="hidden" onChange={(e) => handleHeroVideoUpload(e.target.files[0])} />
-                                            <button onClick={() => heroVideoInputRef.current.click()} className="px-3 py-1 bg-blue-500 text-white rounded text-[10px] font-bold uppercase tracking-widest">Subir</button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="mt-8 flex justify-end"><button onClick={() => setIsParamsModalOpen(false)} className="px-10 py-4 bg-primary text-black font-black rounded-xl uppercase tracking-widest text-xs">Guardar Cambios</button></div>
-                            </DialogContent>
-                        </Dialog>
+                                    <div className="mt-8 flex justify-end"><button onClick={() => setIsParamsModalOpen(false)} className="px-10 py-4 bg-primary text-black font-black rounded-xl uppercase tracking-widest text-xs">Guardar Cambios</button></div>
+                                </DialogContent>
+                            </Dialog>
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {/* Sub-Header Actions */}
                 <div className="flex items-center justify-between mb-8">
@@ -1298,7 +1359,85 @@ export default function MasterPlan() {
                                 Plantilla de Exportación
                             </button>
                         )}
-                        <button onClick={handleExportPDF} className="px-6 py-2 bg-primary text-black font-black rounded-xl text-[10px] tracking-widest uppercase">Exportar PDF</button>
+                        {isAdminAuthenticated && isAdmin && legacySlug && (
+                            <button
+                                onClick={importLegacyData}
+                                className="px-6 py-2 bg-amber-500/10 border border-amber-500/50 text-amber-500 hover:bg-amber-500/20 font-black rounded-xl text-[10px] tracking-widest uppercase transition-all flex items-center gap-2"
+                                title="Importar datos del Master Plan General (v4.45)"
+                            >
+                                <Upload size={14} />
+                                Recuperar Datos Legados
+                            </button>
+                        )}
+
+                        <button
+                            onClick={toggleAdmin}
+                            className={`px-6 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2 ${isAdmin ? 'border-red-500/50 bg-red-500/10 text-red-500' : 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20'}`}
+                        >
+                            {isAdminAuthenticated ? (isAdmin ? "Cerrar Editor" : "Abrir Editor") : "Acceso SOLIFOOD"}
+                        </button>
+
+                        {isAdmin && (
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl p-1 shadow-inner">
+                                    <div className="flex items-center gap-2 px-2 border-r border-white/5">
+                                        <span className="text-[8px] font-black text-gray-500 uppercase tracking-tighter">UTILIDAD:</span>
+                                        <input
+                                            type="number"
+                                            value={globalUtilVal}
+                                            onChange={(e) => setGlobalUtilVal(e.target.value)}
+                                            className="w-12 bg-black/40 border-none text-[10px] font-black text-center text-primary rounded focus:ring-1 focus:ring-primary/40 focus:outline-none"
+                                        />
+                                        <span className="text-[10px] font-black text-primary">%</span>
+                                    </div>
+                                    <button
+                                        onClick={applyGlobalUtility}
+                                        className="px-3 py-1.5 text-[8px] font-black text-white bg-primary/20 hover:bg-primary/40 rounded-lg transition-all uppercase tracking-widest border border-primary/20"
+                                    >
+                                        Aplicar
+                                    </button>
+                                </div>
+
+                                <button
+                                    onClick={toggleColsLocked}
+                                    className={`px-4 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2 ${colsLocked ? 'border-amber-500/50 bg-amber-500/10 text-amber-500' : 'border-blue-500/50 bg-blue-500/10 text-blue-500'}`}
+                                >
+                                    {colsLocked ? <Lock size={12} /> : <Unlock size={12} />}
+                                    {colsLocked ? "Celdas" : "Libre"}
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        setTargetAmountValue(grandTotals.totalVenta.toFixed(2));
+                                        setTargetAmountModalOpen(true);
+                                    }}
+                                    className="px-4 py-2 rounded-xl border border-primary/50 bg-primary/20 text-white text-[10px] font-black tracking-widest uppercase hover:bg-primary/30 transition-all flex items-center gap-2"
+                                >
+                                    <ChevronsDown size={14} className="text-primary" />
+                                    Monto
+                                </button>
+
+                                <button
+                                    onClick={justifyAllDescriptions}
+                                    className="px-4 py-2 rounded-xl border border-primary/30 bg-primary/5 text-primary text-[10px] font-black tracking-widest uppercase hover:bg-primary/20 transition-all flex items-center gap-2"
+                                    title="Justificar descripciones"
+                                >
+                                    <AlignJustify size={14} />
+                                    Justificar
+                                </button>
+
+                                <button
+                                    onClick={() => saveToCloud()}
+                                    disabled={isCloudSyncing}
+                                    className={`px-4 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2 ${isCloudSyncing ? 'bg-zinc-800 text-zinc-500 border-zinc-700' : 'border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'}`}
+                                >
+                                    {isCloudSyncing ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                                    {isCloudSyncing ? "..." : "Guardar"}
+                                </button>
+                            </div>
+                        )}
+
+                        <button onClick={handleExportPDF} className="px-6 py-2 bg-primary text-black font-black rounded-xl text-[10px] tracking-widest uppercase text-center flex items-center justify-center ml-auto">Exportar PDF</button>
                         <div className="flex bg-white/5 border border-white/10 rounded-xl p-1 gap-1">
                             <button
                                 onClick={() => toggleAllSections(false)}
@@ -1352,6 +1491,34 @@ export default function MasterPlan() {
                 </div>
 
                 <div className="space-y-12">
+                    {sections.length === 0 && (
+                        <div className="flex flex-col items-center justify-center p-20 bg-zinc-950/40 border border-white/5 rounded-[2rem] border-dashed text-center">
+                            <div className="p-4 bg-red-500/10 rounded-full mb-6 border border-red-500/20">
+                                <Shield className="w-12 h-12 text-red-500" />
+                            </div>
+                            <h2 className="text-2xl font-black text-white uppercase mb-2">Plan Maestro Vacío</h2>
+                            <p className="text-gray-400 text-sm max-w-md mb-8">
+                                Parece que no hay módulos cargados. Esto puede deberse a un error de sincronización de la versión anterior.
+                            </p>
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={() => {
+                                        setSections(initialSections);
+                                        saveToCloud({ ...sections, sections: initialSections });
+                                    }}
+                                    className="px-6 py-3 bg-primary text-black font-black rounded-xl uppercase tracking-widest text-xs hover:scale-105 transition-all"
+                                >
+                                    Restaurar Predeterminado
+                                </button>
+                                <button
+                                    onClick={() => isAdmin && fileInputRef.current.click()}
+                                    className="px-6 py-3 bg-white/5 border border-white/10 text-white font-black rounded-xl uppercase tracking-widest text-xs hover:bg-white/10 transition-all"
+                                >
+                                    Importar Excel
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     {sections.map((s, sIdx) => {
                         const visibleCols = isAdmin
                             ? ['item', 'equipo', 'descripcion', 'media', 'qty', 'costo', 'util', 'unitario', 'total', 'action']
@@ -1829,7 +1996,7 @@ export default function MasterPlan() {
                     onCancel={() => setShowPasswordPrompt(false)}
                 />
             )}
-        </div >
+        </div>
     );
 }
 

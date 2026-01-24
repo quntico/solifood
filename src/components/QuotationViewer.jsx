@@ -39,6 +39,7 @@ import CapacidadesSection from '@/components/sections/CapacidadesSection';
 import SCR700Page from '@/components/sections/SCR700Page';
 import ClientesSection from '@/components/sections/ClientesSection';
 import VentajasSection from '@/components/sections/VentajasSection';
+import MasterPlan from '@/pages/MasterPlan';
 
 const componentMap = {
   ventajas: VentajasSection,
@@ -66,6 +67,7 @@ const componentMap = {
   clientes: ClientesSection,
   admin: GenericSection,
   servicios_adicionales: GenericSection,
+  master_plan: MasterPlan,
 };
 
 const defaultSections = [
@@ -90,22 +92,49 @@ const defaultSections = [
 
 const clientVisibleSections = new Set(defaultSections.filter(s => !s.adminOnly).map(s => s.id));
 
-const mergeWithDefaults = (config, themeKey) => {
+const mergeWithDefaults = (rawConfig, themeKey) => {
+  let config = rawConfig;
+
+  // DEFENSIVE PARSE: If config is a string (rare but happens on some DB fetches), try to parse it
+  if (typeof config === 'string') {
+    try {
+      config = JSON.parse(config);
+      console.log("[QuotationViewer] Parsed sections_config string successfully");
+    } catch (e) {
+      console.warn("[QuotationViewer] Failed to parse sections_config string:", e);
+    }
+  }
+
   // UNIVERSAL EXTRACTOR: Use sections array if wrapped in object
   const sectionsToMerge = Array.isArray(config) ? config : (config?.sections || []);
+
   if (!sectionsToMerge || sectionsToMerge.length === 0) return defaultSections;
+
   const defaultConfigMap = new Map(defaultSections.map(s => [s.id, s]));
   let mergedConfig = sectionsToMerge
     .filter(s => s.id !== 'propuesta_dinamica') // Explicitly filter out prop_dinamica from DB configs
     .map(s => {
       let merged;
-      if (!defaultConfigMap.has(s.id)) {
-        const baseComponentId = s.component || s.id.split('_copy')[0];
-        const baseConfig = defaultConfigMap.get(baseComponentId) || {};
-        merged = { ...baseConfig, ...s, component: baseComponentId };
-      } else {
-        merged = { ...defaultConfigMap.get(s.id), ...s };
-      }
+      const base = defaultConfigMap.get(s.id) || defaultConfigMap.get(s.component || s.id.split('_copy')[0]) || {};
+
+      // ROBUST CONTENT MERGE: Ensure default structures (like steps) aren't nuked by minimal DB updates
+      const sContent = s.content || {};
+      const baseContent = base.content || {};
+
+      // If both have steps, prioritze DB steps but keep other base fields? No, prioritize whole array if it exists.
+      const mergedSteps = sContent.steps || baseContent.steps;
+
+      const mergedContent = {
+        ...baseContent,
+        ...sContent,
+        ...(mergedSteps ? { steps: mergedSteps } : {})
+      };
+
+      merged = {
+        ...base,
+        ...s,
+        content: mergedContent
+      };
 
       // FORCE UNLOCK for specific sections to ensure they are editable regardless of DB state
       if (['ia', 'layout', 'video', 'calculadora_prod'].includes(merged.id)) {
@@ -123,7 +152,23 @@ const mergeWithDefaults = (config, themeKey) => {
   defaultSections.forEach(ds => {
     if (!existingIds.has(ds.id)) mergedConfig.push(ds);
   });
-  return mergedConfig;
+
+  // ROBUST WRAPPER: Sort the final configuration based on the input order to preserve Drag&Drop
+  const idToIndex = new Map(sectionsToMerge.map((s, idx) => [s.id, idx]));
+  const sortedConfig = [...mergedConfig].sort((a, b) => {
+    const idxA = idToIndex.has(a.id) ? idToIndex.get(a.id) : 1000;
+    const idxB = idToIndex.has(b.id) ? idToIndex.get(b.id) : 1000;
+    return idxA - idxB;
+  });
+
+  if (config && !Array.isArray(config)) {
+    return {
+      ...config,
+      sections: sortedConfig
+    };
+  }
+
+  return sortedConfig;
 };
 
 const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = false }) => {
@@ -137,6 +182,7 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
   const [showCommandDialog, setShowCommandDialog] = useState(false);
   const [aiQuery, setAiQuery] = useState('');
   const [isBannerVisible, setIsBannerVisible] = useState(true);
+  const [isHydrated, setIsHydrated] = useState(false);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [isFullBlackout, setIsFullBlackout] = useState(false);
@@ -178,16 +224,21 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
 
     if (isAdminView) {
       const savedTheme = localStorage.getItem('activeTheme');
-      // Only restore if valid AND FULL (has sections_config)
-      if (savedTheme && allThemes[savedTheme] && allThemes[savedTheme].sections_config) {
+      // FALLBACK SEGURO: Si el tema guardado no existe o no tiene datos, forzar el inicial
+      if (savedTheme && initialThemes[savedTheme] && initialThemes[savedTheme].sections_config) {
         setActiveTheme(savedTheme);
       } else {
+        console.warn("[QuotationViewer] Fallback to initial theme due to missing saved data");
         setActiveTheme(initialQuotationData.theme_key);
       }
     } else {
       setActiveTheme(initialQuotationData.theme_key);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    // [SAFETY] If we already have localized data, we are hydrated
+    if (processedData.sections_config) {
+      setIsHydrated(true);
+    }
   }, [initialQuotationData.theme_key, isAdminView]);
 
   // EFFECT: Auto-fetch full data if the ACTIVE theme is a stub
@@ -196,6 +247,7 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
     // Check if it exists but is missing heavy content (e.g. sections_config)
     if (currentTheme && !currentTheme.sections_config) {
       console.log(`[LazyLoad] Active theme ${activeTheme} is a stub. Fetching full content...`);
+      setIsHydrated(false); // BLOCK saving while fetching
       supabase
         .from('quotations')
         .select('*')
@@ -203,13 +255,19 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
         .single()
         .then(({ data, error }) => {
           if (data && !error) {
+            const processedData = {
+              ...data,
+              sections_config: mergeWithDefaults(data.sections_config, activeTheme)
+            };
             setThemes(prev => ({
               ...prev,
-              [activeTheme]: { ...prev[activeTheme], ...data }
+              [activeTheme]: processedData
             }));
-            console.log(`[LazyLoad] Content loaded for ${activeTheme}`);
+            setIsHydrated(true);
+            console.log(`[LazyLoad] Content loaded and hydrated for ${activeTheme}`);
           } else {
             console.error(`[LazyLoad] Failed to load content for ${activeTheme}`, error);
+            setIsHydrated(true); // Allow interaction even if fail
             toast({ title: "Error de Carga", description: "No se pudo descargar el contenido.", variant: "destructive" });
           }
         });
@@ -387,46 +445,54 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
   }, []);
 
   const setSectionsConfig = async (newConfig) => {
-    // 1. Resolve full current configuration to ensure we don't lose anything
-    const fullConfigRaw = themes[activeTheme]?.sections_config;
-    const fullArray = Array.isArray(fullConfigRaw) ? fullConfigRaw : (fullConfigRaw?.sections || defaultSections);
-
-    let finalConfigArray;
+    // [SAFETY] Hydration Guard: Prevent overwriting the DB if we haven't finished loading the current state
+    if (!isHydrated) {
+      console.warn("[QuotationViewer] Save blocked: Still hydrating data...");
+      toast({
+        title: "Sincronizando...",
+        description: "Espera a que termine la carga para guardar tus cambios.",
+        variant: "default"
+      });
+      return;
+    }
 
     // Safety: ensure newConfig is an array
     const newConfigArray = Array.isArray(newConfig) ? newConfig : [];
 
-    // 2. Logic to merge or overwrite
-    // If we only have a subset (like from Sidebar's filtered list), merge it
-    if (newConfigArray.length < fullArray.length && newConfigArray.length > 0) {
-      const newConfigIds = new Set(newConfigArray.map(s => s.id));
-      const excludedItems = fullArray.filter(s => !newConfigIds.has(s.id));
-      finalConfigArray = [...newConfigArray, ...excludedItems];
-    } else {
-      finalConfigArray = newConfigArray;
-    }
-
-    // 3. Sanitize to remove non-persistent props
-    const sanitizedConfig = finalConfigArray.map(({ Component, subItems, ...rest }) => rest);
-
-    // 4. Create wrapped payload consistent with DB and AdminModal
-    const wrappedPayload = {
-      sections: sanitizedConfig,
-      heroVideoUrl: themes[activeTheme]?.video_url || initialQuotationData.video_url,
-      updated_at: new Date().toISOString()
-    };
-
     try {
-      // Update Local State (using functional update to be safe)
+      // [FIX] CONSTRUCT PAYLOAD OUTSIDE setThemes to avoid race conditions
+      const currentTheme = themes[activeTheme];
+      const fullConfigRaw = currentTheme?.sections_config;
+      const fullArrayByVal = Array.isArray(fullConfigRaw) ? fullConfigRaw : (fullConfigRaw?.sections || defaultSections);
+
+      let finalConfigArray;
+      if (newConfigArray.length < fullArrayByVal.length && newConfigArray.length > 0) {
+        const newIds = new Set(newConfigArray.map(s => s.id));
+        const excludedItems = fullArrayByVal.filter(s => !newIds.has(s.id));
+        finalConfigArray = [...newConfigArray, ...excludedItems];
+      } else {
+        finalConfigArray = newConfigArray;
+      }
+
+      const sanitizedConfig = finalConfigArray.map(({ Component, subItems, ...rest }) => rest);
+      const config_raw = currentTheme?.sections_config || {};
+      const wrappedPayload = {
+        ...(typeof config_raw === 'object' && !Array.isArray(config_raw) ? config_raw : {}),
+        sections: sanitizedConfig,
+        heroVideoUrl: currentTheme?.video_url || initialQuotationData.video_url,
+        updated_at: new Date().toISOString()
+      };
+
+      // 1. Update Local State (Immediate)
       setThemes(prevThemes => ({
         ...prevThemes,
         [activeTheme]: {
           ...prevThemes[activeTheme],
-          sections_config: wrappedPayload // Consistently save the wrapped object
+          sections_config: wrappedPayload
         },
       }));
 
-      // Persist to Supabase
+      // 2. Persist to Supabase
       const { error } = await supabase
         .from('quotations')
         .update({ sections_config: wrappedPayload })
@@ -438,7 +504,7 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
         toast({
           title: "Sincronizado",
           description: "La configuración se ha guardado correctamente.",
-          duration: 3000
+          duration: 2000
         });
       }
     } catch (err) {
@@ -457,7 +523,18 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
     const fullArray = Array.isArray(fullConfigRaw) ? fullConfigRaw : (fullConfigRaw?.sections || defaultSections);
 
     const newConfig = fullArray.map(s =>
-      s.id === sectionId ? { ...s, _deleted: true } : s
+      s.id === sectionId ? { ...s, _deleted: true, isVisible: false } : s
+    );
+
+    await setSectionsConfig(newConfig);
+  };
+
+  const handleRestoreSection = async (sectionId) => {
+    const fullConfigRaw = themes[activeTheme]?.sections_config;
+    const fullArray = Array.isArray(fullConfigRaw) ? fullConfigRaw : (fullConfigRaw?.sections || defaultSections);
+
+    const newConfig = fullArray.map(s =>
+      s.id === sectionId ? { ...s, _deleted: false, isVisible: true } : s
     );
 
     await setSectionsConfig(newConfig);
@@ -497,56 +574,76 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
 
 
 
-  if (!displayData) return null;
+  if (!displayData) {
+    if (initialQuotationData) {
+      return (
+        <div className="flex h-screen items-center justify-center bg-black text-primary p-12 text-center flex-col gap-4">
+          <Loader2 className="animate-spin w-12 h-12" />
+          <p className="text-xl font-bold uppercase tracking-widest">Cargando Datos de Seguridad...</p>
+          <button onClick={() => window.location.reload()} className="px-4 py-2 border border-primary/50 rounded-xl text-xs">Reintentar</button>
+        </div>
+      );
+    }
+    return null;
+  }
 
-  // UNIVERSAL CONFIG RESOLVER: Handle both Array (Standard) and Object (Master Plan/Defensive)
-  const config = displayData.sections_config;
-  const sectionsArray = Array.isArray(config)
-    ? config
-    : (config?.sections || defaultSections);
+  // RESOLVE FINAL MENU ITEMS
+  const menuItems = React.useMemo(() => {
+    const config = displayData?.sections_config;
+    // v4.47 logic: mergeWithDefaults returns an object with order preservation
+    const normalizedSections = mergeWithDefaults(config, activeTheme);
+
+    const sectionsArray = Array.isArray(normalizedSections)
+      ? normalizedSections
+      : (normalizedSections?.sections || []);
+
+    return sectionsArray.map(section => {
+      const cleanCompKey = (section.component || section.id).split('_copy')[0];
+
+      let displayLabel = section.label;
+      if (section.id === 'ventajas' && (displayLabel === 'sections.ventajas' || !displayLabel)) {
+        displayLabel = t('sections.ventajas');
+      }
+
+      const isMpSection = (section.id && section.id.startsWith('sec_')) || section.titulo;
+      const finalLabel = isMpSection && !displayLabel ? (section.titulo || "Módulo") : (displayLabel || t(`sections.${section.id}`));
+
+      let subItems = [];
+      if (section.id === 'ficha' && section.content && Array.isArray(section.content)) {
+        subItems = section.content.map((item, index) => ({
+          id: index,
+          label: item.tabTitle || `Ficha ${index + 1}`,
+          icon: item.icon || 'FileText'
+        }));
+      }
+
+      return {
+        ...section,
+        Component: componentMap[cleanCompKey] || componentMap[section.id] || GenericSection,
+        label: finalLabel,
+        subItems
+      };
+    }).filter(item => {
+      if (!isAdminView) {
+        return item.isVisible && clientVisibleSections.has(item.id.split('_copy')[0]) && !item.adminOnly && !item._deleted;
+      } else if (!isAdminAuthenticated) {
+        return item.isVisible && !item.adminOnly && !item._deleted;
+      } else {
+        const coreIds = new Set(['portada', 'descripcion', 'ficha', 'cronograma', 'servicios', 'layout', 'video', 'proceso', 'calculadora_prod', 'pdf', 'propuesta', 'exclusiones', 'ia', 'capacidades', 'clientes', 'ventajas']);
+        if (!item._deleted) return true;
+        return coreIds.has(item.id.split('_copy')[0]) || item.adminOnly;
+      }
+    });
+  }, [displayData?.sections_config, activeTheme, isAdminView, isAdminAuthenticated, t]);
 
   // Resolve Video URL from column or fallback JSON (Defensive)
-  const resolvedVideoUrl = displayData.video_url || (config && !Array.isArray(config) ? config.heroVideoUrl : null);
+  const resolvedVideoUrl = displayData.video_url || (displayData.sections_config && !Array.isArray(displayData.sections_config) ? displayData.sections_config.heroVideoUrl : null);
 
-  let menuItems = sectionsArray.map(section => {
-    const cleanCompKey = (section.component || section.id).split('_copy')[0];
-    // Fix for 'ventajas' label potentially being saved as the translation key
-    let displayLabel = section.label;
-    if (section.id === 'ventajas' && (displayLabel === 'sections.ventajas' || !displayLabel)) {
-      displayLabel = t('sections.ventajas');
-    }
-
-    // Generate subItems for Ficha
-    let subItems = [];
-    if (section.id === 'ficha' && section.content && Array.isArray(section.content)) {
-      subItems = section.content.map((item, index) => ({
-        id: index,
-        label: item.tabTitle || `Ficha ${index + 1}`,
-        icon: item.icon || 'FileText'
-      }));
-    }
-
-    return {
-      ...section,
-      Component: componentMap[cleanCompKey] || componentMap[section.id] || GenericSection,
-      label: displayLabel || t(`sections.${section.id}`),
-      subItems // Add subItems
-    };
-  });
-
-  // Extra safety filter to ensure removed components don't crash
-  menuItems = menuItems.filter(section => section.id !== 'propuesta_dinamica' && !['ventajas', 'generales'].includes(section.id));
-
-  if (!isAdminView) {
-    // Filter hidden items and admin items for normal view
-    menuItems = menuItems.filter(item => item.isVisible && clientVisibleSections.has(item.id.split('_copy')[0]) && !item.adminOnly && !item._deleted);
-  } else if (!isAdminAuthenticated) {
-    // Filter admin items for non-authenticated admin view AND respect visibility
-    menuItems = menuItems.filter(item => item.isVisible && !item.adminOnly && !item._deleted);
-  } else {
-    // Admin authenticated view: still hide deleted items
-    menuItems = menuItems.filter(item => !item._deleted);
-  }
+  // ENRICHED DATA for components
+  const enrichedQuotationData = React.useMemo(() => ({
+    ...displayData,
+    video_url: resolvedVideoUrl
+  }), [displayData, resolvedVideoUrl]);
 
   const handleVideoUrlUpdate = async (newUrl) => {
     const fullConfigRaw = themes[activeTheme]?.sections_config;
@@ -647,11 +744,26 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
     const activeSectionObj = menuItems.find(s => s.id === activeSection);
     const ActiveComponent = activeSectionObj?.Component || componentMap[activeSection] || GenericSection;
 
+    if (activeSection === 'master_plan') {
+      const isMpAdmin = isAdminAuthenticated && isAdminView;
+      return (
+        <div className="flex-1 overflow-y-auto custom-scrollbar" id="main-content-scroll-area">
+          <MasterPlan
+            isSubmenuMode={true}
+            slug={`mp-${activeTheme}`}
+            legacySlug="master-plan-concentrado"
+            isAdmin={isEditorMode && isAdminView}
+            isAdminAuthenticated={isAdminAuthenticated && isAdminView}
+          />
+        </div>
+      );
+    }
+
     return (
       <MainContent
         activeSection={activeSection}
         setActiveSection={setActiveSection}
-        quotationData={displayData}
+        quotationData={enrichedQuotationData}
         aiQuery={aiQuery}
         setAiQuery={setAiQuery}
         sections={menuItems}
@@ -737,6 +849,7 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
             onSubItemSelect={handleSubItemSelect}
             activeTabMap={activeTabMap}
             onDeleteSection={handleDeleteSection}
+            onRestoreSection={handleRestoreSection}
           />
         </div>
         <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${isSidebarCollapsed ? 'lg:pl-[80px]' : 'lg:pl-[320px]'} pl-0`}>

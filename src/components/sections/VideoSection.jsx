@@ -47,7 +47,7 @@ function getYouTubeEmbedUrl(input) {
 
 export default function VideoSection({ quotationData, onVideoUrlUpdate, isEditorMode }) {
   // Force rebuild timestamp: 2025-12-01
-  const initialUrl = quotationData?.video_url || "";
+  const initialUrl = quotationData?.video_url || (quotationData?.sections_config?.heroVideoUrl) || "";
   const [input, setInput] = useState(initialUrl);
   const [embedUrl, setEmbedUrl] = useState(null);
   const [error, setError] = useState(null);
