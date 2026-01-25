@@ -96,12 +96,24 @@ const FichaTecnicaSection = ({ sectionData, quotationData, isEditorMode, onConte
 
   useEffect(() => {
     if (sectionData?.content) {
-      // Re-run migration logic if props change significantly, but usually we trust local state for editing
-      // For now, we sync only if we are not editing to avoid overwriting work in progress?
-      // Actually, we should sync if the DB updates.
-      // But for now, let's keep the initial load logic.
+      const freshContent = (() => {
+        const originalContent = sectionData.content;
+        if (Array.isArray(originalContent)) {
+          return originalContent.length > 0 ? originalContent.map(tab => ({ ...defaultContentSingle, ...tab })) : [defaultContentSingle];
+        }
+        // Recover from index-mangled objects if they were saved previously
+        if (typeof originalContent === 'object' && originalContent !== null && originalContent["0"]) {
+          return Object.values(originalContent).map(tab => ({ ...defaultContentSingle, ...tab }));
+        }
+        if (originalContent.technical_data || originalContent.components) {
+          return [{ ...defaultContentSingle, ...originalContent }];
+        }
+        return [defaultContentSingle];
+      })();
+
+      setContent(JSON.parse(JSON.stringify(freshContent)));
     }
-  }, [sectionData]);
+  }, [sectionData?.content]); // React only to content changes
 
   useEffect(() => {
     if (activeTab >= content.length) {

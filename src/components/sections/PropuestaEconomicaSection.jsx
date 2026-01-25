@@ -18,7 +18,8 @@ import {
   Lock,
   Unlock,
   Zap,
-  DollarSign
+  DollarSign,
+  AlignJustify
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -230,6 +231,24 @@ const ItemEditorPanel = ({ item, group, onUpdate, onDelete, currency }) => {
 
         <div className="flex items-center justify-between bg-gray-900/30 p-4 rounded-lg border border-gray-800">
           <div className="space-y-1">
+            <Label className="text-gray-200">Justificar Texto</Label>
+            <p className="text-xs text-gray-500">Alinear la descripción de forma justificada.</p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onUpdate(group.id, item.id, 'isJustified', !item.isJustified)}
+            className={cn(
+              "h-9 px-3 border-gray-700 transition-all",
+              item.isJustified ? "bg-primary/20 text-primary border-primary/50" : "bg-black text-gray-500"
+            )}
+          >
+            <AlignJustify size={16} />
+          </Button>
+        </div>
+
+        <div className="flex items-center justify-between bg-gray-900/30 p-4 rounded-lg border border-gray-800">
+          <div className="space-y-1">
             <Label className="text-gray-200">Estado Activo</Label>
             <p className="text-xs text-gray-500">Determina si este item se incluye en el cálculo total.</p>
           </div>
@@ -377,31 +396,41 @@ const PropuestaEconomicaSection = ({
 
   const isModeAdmin = isEditorMode || localAdminMode;
 
-  // Initialize state with defaults + props
-  const [content, setContent] = useState(() => ({
-    ...DEFAULT_CONTENT,
-    ...(sectionData.content || {}),
-    exchangeRate: sectionData.content?.exchangeRate ?? DEFAULT_CONTENT.exchangeRate
-  }));
+  // [SELF-HEALING] Resolver: Pure helper to clean mangled data
+  const resolveContent = (raw) => {
+    if (!raw) return DEFAULT_CONTENT;
 
-  // Sync state when props change (external updates)
-  // Sync state when props change (external updates)
+    // Recovery from indexed objects
+    if (typeof raw === 'object' && raw !== null && !Array.isArray(raw) && raw["0"] && (raw["0"].groups || raw["0"].items)) {
+      return resolveContent(raw["0"]);
+    }
+
+    // Migration from direct arrays
+    if (Array.isArray(raw)) {
+      return { ...DEFAULT_CONTENT, groups: raw };
+    }
+
+    if (raw.groups) return raw;
+    return { ...DEFAULT_CONTENT, ...raw };
+  };
+
+  // 1. Initialize state with robust resolution
+  const [content, setContent] = useState(() =>
+    JSON.parse(JSON.stringify(resolveContent(sectionData.content)))
+  );
+
+  // 2. Sync state when props change (External Updates Only)
   useEffect(() => {
-    if (sectionData.content && sectionData.content.groups && sectionData.content.groups.length > 0) {
-      // If we have saved groups, use them directly and DO NOT merge with defaults for groups
-      // This prevents deleted items from reappearing if they exist in defaults
-      setContent(prev => ({
-        ...prev,
-        ...sectionData.content
-      }));
-    } else {
-      // Only fall back to defaults if no saved content exists
-      setContent(prev => ({
-        ...prev,
-        ...DEFAULT_CONTENT,
-        ...(sectionData.content || {}),
-        exchangeRate: sectionData.content?.exchangeRate ?? DEFAULT_CONTENT.exchangeRate
-      }));
+    if (sectionData.content) {
+      const incoming = resolveContent(sectionData.content);
+      const incomingStr = JSON.stringify(incoming);
+      const currentStr = JSON.stringify(content);
+
+      // [FIX] Avoid overwriting if they are identical (prevents loss of focus or race resets)
+      if (incomingStr !== currentStr) {
+        console.log("[PropuestaEconomica] Syncing external content update...");
+        setContent(JSON.parse(incomingStr));
+      }
     }
   }, [sectionData.content]);
 
@@ -893,7 +922,12 @@ const PropuestaEconomicaSection = ({
                                             <span className="text-primary font-bold text-sm">{index + 1}.</span>
                                             <span className={cn("font-bold text-sm uppercase transition-all border-b-2", item.isActive ? "border-primary" : "border-transparent")}>{item.title}</span>
                                           </div>
-                                          <p className="text-gray-400 text-xs">{item.subtitle}</p>
+                                          <p className={cn(
+                                            "text-gray-400 text-xs leading-relaxed",
+                                            item.isJustified && "text-justify"
+                                          )}>
+                                            {item.subtitle}
+                                          </p>
                                         </div>
                                       </div>
                                     </div>

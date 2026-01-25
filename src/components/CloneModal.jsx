@@ -61,7 +61,8 @@ const CloneModal = ({ isOpen, onClose, themes, setThemes, activeTheme, onCloneSu
 
     setIsCloning(true);
     try {
-      const newThemeKey = `${sourceThemeData.theme_key.split('_')[0]}_${slugify(clientName)}_${slugify(projectName)}`.slice(0, 50);
+      const sourceThemeKey = sourceThemeData.theme_key;
+      const newThemeKey = `${sourceThemeKey.split('_')[0]}_${slugify(clientName)}_${slugify(projectName)}`.slice(0, 50);
       const newSlug = slugify(projectName);
 
       const { data: existing, error: checkError } = await supabase
@@ -96,9 +97,12 @@ const CloneModal = ({ isOpen, onClose, themes, setThemes, activeTheme, onCloneSu
         ...sourceThemeData,
         client: clientName,
         project: projectName,
+        title: projectName, // Sync title with Project Name
+        subtitle: clientName, // Sync subtitle with Client Name
         theme_key: newThemeKey,
         slug: newSlug,
-        is_template: false, // Cloned quotations are not templates
+        is_template: false,
+        is_home: false,
       };
 
       delete newQuotationData.id;
@@ -113,6 +117,69 @@ const CloneModal = ({ isOpen, onClose, themes, setThemes, activeTheme, onCloneSu
         .single();
 
       if (error) throw error;
+
+      const newQuotationId = newRecord.id;
+
+      // --- DEEP CLONE: MASTER PLAN (Separate Record) ---
+      try {
+        const { data: sourceMp } = await supabase
+          .from('quotations')
+          .select('*')
+          .eq('slug', `mp-${sourceThemeKey}`)
+          .single();
+
+        if (sourceMp) {
+          const newMpData = {
+            ...sourceMp,
+            theme_key: `mp_${Math.random().toString(36).substring(2, 9)}_${newThemeKey}`.slice(0, 50),
+            slug: `mp-${newThemeKey}`,
+            is_home: false,
+            is_template: false,
+            client: clientName,
+            project: projectName,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          delete newMpData.id;
+          await supabase.from('quotations').insert(newMpData);
+          console.log("[CloneModal] Master Plan cloned successfully");
+        }
+      } catch (mpError) {
+        console.warn("[CloneModal] Master Plan clone skipped or failed:", mpError);
+      }
+
+      // --- DEEP CLONE: RELATED TABLES ---
+      const relatedTables = [
+        { name: 'machines', matchKey: 'theme_key', matchVal: sourceThemeKey },
+        { name: 'images', matchKey: 'theme_key', matchVal: sourceThemeKey },
+        { name: 'pdf_quotations', matchKey: 'theme_key', matchVal: sourceThemeKey },
+        { name: 'process_conditions', matchKey: 'quotation_id', matchVal: sourceThemeData.id }
+      ];
+
+      for (const table of relatedTables) {
+        try {
+          const { data: sourceItems } = await supabase
+            .from(table.name)
+            .select('*')
+            .eq(table.matchKey, table.matchVal);
+
+          if (sourceItems && sourceItems.length > 0) {
+            const newItems = sourceItems.map(item => {
+              const newItem = { ...item };
+              delete newItem.id;
+              newItem.created_at = new Date().toISOString();
+              // Update links
+              if (newItem.hasOwnProperty('theme_key')) newItem.theme_key = newThemeKey;
+              if (newItem.hasOwnProperty('quotation_id')) newItem.quotation_id = newQuotationId;
+              return newItem;
+            });
+            await supabase.from(table.name).insert(newItems);
+            console.log(`[CloneModal] Cloned ${newItems.length} items from ${table.name}`);
+          }
+        } catch (tableError) {
+          console.warn(`[CloneModal] Error cloning table ${table.name}:`, tableError);
+        }
+      }
 
       setThemes(prev => ({ ...prev, [newThemeKey]: newRecord }));
       if (onCloneSuccess) onCloneSuccess(newThemeKey);

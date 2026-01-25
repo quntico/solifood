@@ -26,16 +26,24 @@ const MainContent = ({
 }) => {
 
   const handleContentChange = (sectionId, newContent) => {
-    // UNIVERSAL RESOLVER: Handle both Array and Wrapped Object
     const sourceList = Array.isArray(allSectionsData)
       ? allSectionsData
       : (allSectionsData?.sections || sections);
 
-    const newSections = sourceList.map(sec =>
-      sec.id === sectionId
-        ? { ...sec, content: { ...(sec.content || {}), ...newContent } }
-        : sec
-    );
+    const newSections = sourceList.map(sec => {
+      if (sec.id !== sectionId) return sec;
+
+      // [FIX] ARRAY PERSISTENCE: If newContent or current content is an array, do NOT merge as object.
+      // Also for 'propuesta' which manages its own full state object.
+      const shouldAssignDirectly = Array.isArray(newContent) || Array.isArray(sec.content) || sec.id === 'propuesta';
+
+      return {
+        ...sec,
+        content: shouldAssignDirectly
+          ? newContent
+          : { ...(sec.content || {}), ...newContent }
+      };
+    });
     onSectionContentUpdate(newSections);
   };
 

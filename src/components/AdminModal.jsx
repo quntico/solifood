@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Check, ChevronsUpDown, X, Save, Eraser, Settings, Palette, Scale, Upload, Image, Loader2, Minimize, Timer, PlaySquare, Clock, CheckCircle, Wrench, Ship, Truck, Copy, Link as LinkIcon, ClipboardCopy, Star, Home, MonitorSpeaker as Announce, MoveHorizontal, EyeOff, ExternalLink, QrCode, RefreshCw, Trash2 } from 'lucide-react';
+import { Check, ChevronsUpDown, X, Save, Eraser, Settings, Palette, Scale, Upload, Image, Loader2, Minimize, Timer, PlaySquare, Clock, CheckCircle, Wrench, Ship, Truck, Copy, Link as LinkIcon, ClipboardCopy, Star, Home, MonitorSpeaker as Announce, MoveHorizontal, EyeOff, ExternalLink, QrCode, RefreshCw, Trash2, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,7 @@ import { QRCodeCanvas } from 'qrcode.react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import { BRANDS } from '@/lib/brands'; // Import brands
+import { generateQRAsPDF } from '@/lib/pdfGenerator';
 
 const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setActiveTheme, onCloneClick, onPreviewUpdate }) => {
   // --- STATE INITIALIZATION WITH SAFETY CHECKS ---
@@ -43,6 +44,7 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
 
   const logoFileInputRef = useRef(null);
   const faviconFileInputRef = useRef(null);
+  const qrRef = useRef(null);
 
 
   const { toast } = useToast();
@@ -56,37 +58,46 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
   useEffect(() => {
     if (isOpen && themes && activeTheme && themes[activeTheme]) {
       const themeDataFromApp = themes[activeTheme];
-      // Defensive copy with defaults
-      setCurrentThemeData({
-        ...themeDataFromApp,
-        logo_size: themeDataFromApp.logo_size ?? 210,
-        banner_text: themeDataFromApp.banner_text ?? '',
-        banner_direction: themeDataFromApp.banner_direction ?? 'left-to-right',
-        banner_scale: themeDataFromApp.banner_scale ?? 40,
-        idle_timeout: themeDataFromApp.idle_timeout ?? 4,
-        initial_display_time: themeDataFromApp.initial_display_time ?? 2,
-        phase1_duration: themeDataFromApp.phase1_duration ?? 5,
-        phase2_duration: themeDataFromApp.phase2_duration ?? 75,
-        phase3_duration: themeDataFromApp.phase3_duration ?? 10,
-        phase1_name: themeDataFromApp.phase1_name ?? 'Confirmación y Orden',
-        phase2_name: themeDataFromApp.phase2_name ?? 'Tiempo de Fabricación',
-        phase3_name: themeDataFromApp.phase3_name ?? 'Transporte',
-        phase4_name: themeDataFromApp.phase4_name ?? 'Instalación y Puesta en Marcha',
-        hide_banner: themeDataFromApp.hide_banner ?? false,
-        hero_video_is_integrated: themeDataFromApp.hero_video_is_integrated ?? false,
-        hero_video_scale: themeDataFromApp.hero_video_scale ?? 100,
-        hero_video_border_radius: themeDataFromApp.hero_video_border_radius ?? 20,
+      // FIXED: Only sync if we don't have local data yet or if the theme has changed
+      // This prevents auto-saves from overwriting the user's current typing
+      setCurrentThemeData(prev => {
+        if (prev && prev.theme_key === activeTheme) return prev;
+
+        return {
+          ...themeDataFromApp,
+          logo_size: themeDataFromApp.logo_size ?? 210,
+          banner_text: themeDataFromApp.banner_text ?? '',
+          banner_direction: themeDataFromApp.banner_direction ?? 'left-to-right',
+          banner_scale: themeDataFromApp.banner_scale ?? 40,
+          idle_timeout: themeDataFromApp.idle_timeout ?? 4,
+          initial_display_time: themeDataFromApp.initial_display_time ?? 2,
+          phase1_duration: themeDataFromApp.phase1_duration ?? 5,
+          phase2_duration: themeDataFromApp.phase2_duration ?? 75,
+          phase3_duration: themeDataFromApp.phase3_duration ?? 10,
+          phase1_name: themeDataFromApp.phase1_name ?? 'Confirmación y Orden',
+          phase2_name: themeDataFromApp.phase2_name ?? 'Tiempo de Fabricación',
+          phase3_name: themeDataFromApp.phase3_name ?? 'Transporte',
+          phase4_name: themeDataFromApp.phase4_name ?? 'Instalación y Puesta en Marcha',
+          hide_banner: themeDataFromApp.hide_banner ?? false,
+          hero_video_is_integrated: themeDataFromApp.hero_video_is_integrated ?? false,
+          hero_video_scale: themeDataFromApp.hero_video_scale ?? 100,
+          hero_video_border_radius: themeDataFromApp.hero_video_border_radius ?? 20,
+        };
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, activeTheme]);
+  }, [isOpen, activeTheme]); // FIXED: Removed themes to prevent save-loops
 
-  // Preview updates
+  // Preview updates with debounce to prevent excessive re-renders
   useEffect(() => {
-    if (onPreviewUpdate && currentThemeData) {
+    if (!isOpen || !onPreviewUpdate || !currentThemeData) return;
+
+    const timer = setTimeout(() => {
       onPreviewUpdate(currentThemeData);
-    }
-  }, [currentThemeData, onPreviewUpdate]);
+    }, 100); // 100ms debounce for preview
+
+    return () => clearTimeout(timer);
+  }, [currentThemeData, onPreviewUpdate, isOpen]);
 
 
   // --- HANDLERS ---
@@ -349,6 +360,8 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
         sections_config: wrappedPayload, // REDUNDANCY FALLBACK
       };
 
+      console.log(`[AdminModal] Saving changes for theme: ${activeTheme}`, dataToSave);
+
       try {
         let attemptData = { ...dataToSave };
         let saveSuccess = false;
@@ -410,21 +423,19 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
   useEffect(() => {
     if (!currentThemeData || !isOpen) return;
 
-    // List of fields that trigger auto-save
-    const autoSaveFields = [currentThemeData.project, currentThemeData.client, currentThemeData.company, currentThemeData.description, currentThemeData.banner_text];
-
     const timer = setTimeout(() => {
-      // We check if data meaningfuly changed compared to 'themes[activeTheme]'? 
-      // For simplicity, we just save if 'currentThemeData' is valid and stable for 1s.
-      // But to avoid spamming on initial open, we should check diff.
-      // Actually, logic is simpler: Just save. Supabase handles it efficiently.
-      // But we need to avoid saving on *initial load*.
-      // Let's rely on user interaction.
-      // BETTER APPROACH: Only auto-save if 'currentThemeData' DIFFERS from 'themes[activeTheme]'
       const originalData = themes[activeTheme];
       if (!originalData) return;
 
-      originalData.banner_text !== currentThemeData.banner_text ||
+      // FIXED: Properly define hasChanges and include title/subtitle
+      const hasChanges =
+        originalData.project !== currentThemeData.project ||
+        originalData.client !== currentThemeData.client ||
+        originalData.title !== currentThemeData.title ||
+        originalData.subtitle !== currentThemeData.subtitle ||
+        originalData.company !== currentThemeData.company ||
+        originalData.description !== currentThemeData.description ||
+        originalData.banner_text !== currentThemeData.banner_text ||
         originalData.hero_video_is_integrated !== currentThemeData.hero_video_is_integrated ||
         originalData.hero_video_scale !== currentThemeData.hero_video_scale ||
         originalData.hero_video_border_radius !== currentThemeData.hero_video_border_radius;
@@ -435,7 +446,20 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, [currentThemeData.project, currentThemeData.client, currentThemeData.company, currentThemeData.description, currentThemeData.banner_text, currentThemeData.hero_video_is_integrated, currentThemeData.hero_video_scale, currentThemeData.hero_video_border_radius]);
+  }, [
+    currentThemeData.project,
+    currentThemeData.client,
+    currentThemeData.title,
+    currentThemeData.subtitle,
+    currentThemeData.company,
+    currentThemeData.description,
+    currentThemeData.banner_text,
+    currentThemeData.hero_video_is_integrated,
+    currentThemeData.hero_video_scale,
+    currentThemeData.hero_video_border_radius,
+    isOpen,
+    activeTheme
+  ]);
 
   const handleSave = () => saveChanges(true);
 
@@ -484,19 +508,20 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
     if (!themes) return;
     setIsSaving(true);
     try {
-      const currentHomeKey = Object.keys(themes).find(key => themes[key].is_home);
-      if (currentHomeKey) {
-        await supabase.from('quotations').update({ is_home: false }).eq('theme_key', currentHomeKey);
-      }
+      // 1. GLOBAL RESET: Ensure NO OTHER project is home
+      await supabase.from('quotations').update({ is_home: false }).neq('theme_key', '---non-existent---');
+
+      // 2. SET ACTIVE AS HOME
       await supabase.from('quotations').update({ is_home: true }).eq('theme_key', activeTheme);
 
       setThemes(prev => {
-        const newThemes = { ...prev };
-        if (currentHomeKey) newThemes[currentHomeKey] = { ...newThemes[currentHomeKey], is_home: false };
-        newThemes[activeTheme] = { ...newThemes[activeTheme], is_home: true };
+        const newThemes = {};
+        Object.keys(prev).forEach(key => {
+          newThemes[key] = { ...prev[key], is_home: key === activeTheme };
+        });
         return newThemes;
       });
-      toast({ title: "Nueva Home Page 🏠", description: "Cotización establecida como inicio." });
+      toast({ title: "Página Principal Actualizada 🏠", description: "Este proyecto es ahora el inicio del sitio." });
     } catch (err) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
@@ -724,7 +749,7 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
                           <SelectTrigger className="w-full bg-black/20 border-white/10 text-white h-10 backdrop-blur-sm focus:ring-primary/50">
                             <SelectValue placeholder="Seleccionar cotización..." />
                           </SelectTrigger>
-                          <SelectContent className="bg-black/90 border-white/10 text-white z-[60] max-h-[300px] backdrop-blur-xl">
+                          <SelectContent className="bg-black/90 border-white/10 text-white z-[500] max-h-[300px] backdrop-blur-xl">
                             {Object.values(themes || {})
                               .sort((a, b) => (a?.project || "").localeCompare(b?.project || ""))
                               .map((theme) => (
@@ -815,7 +840,7 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
                       <Label htmlFor="banner_direction" className="text-gray-300 flex items-center gap-2"><MoveHorizontal className="w-4 h-4" />{t('adminModal.bannerDirection')}</Label>
                       <Select value={currentThemeData.banner_direction} onValueChange={(val) => handleSelectChange('banner_direction', val)}>
                         <SelectTrigger className="bg-gray-900 border-gray-700 text-white"><SelectValue /></SelectTrigger>
-                        <SelectContent className="bg-gray-900 border-gray-700 text-white">
+                        <SelectContent className="bg-gray-900 border-gray-700 text-white z-[500]">
                           <SelectItem value="left-to-right" className="focus:bg-primary">{t('adminModal.leftToRight')}</SelectItem>
                           <SelectItem value="right-to-left" className="focus:bg-primary">{t('adminModal.rightToLeft')}</SelectItem>
                         </SelectContent>
@@ -908,28 +933,66 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
             </div>
           </motion.div>
         </motion.div>
-      )
-      }
+      )}
 
+      {showQR && currentThemeData && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[500] p-4" onClick={() => setShowQR(false)}>
+          <div className="bg-white p-8 rounded-xl flex flex-col items-center gap-6 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+            <Button variant="ghost" size="icon" className="absolute top-2 right-2 text-gray-400 hover:text-black" onClick={() => setShowQR(false)}>
+              <X size={20} />
+            </Button>
 
+            <h3 className="text-2xl font-bold text-black flex items-center gap-2">
+              <QrCode className="text-primary" /> Código QR
+            </h3>
 
-      {
-        showQR && currentThemeData && (
-          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4" onClick={() => setShowQR(false)}>
-            <div className="bg-white p-8 rounded-xl flex flex-col items-center gap-6 shadow-2xl" onClick={e => e.stopPropagation()}>
-              <h3 className="text-2xl font-bold text-black">Código QR</h3>
-              <div className="p-4 bg-white rounded-lg shadow-inner border border-gray-200">
-                <QRCodeCanvas value={`https://www.solifood.site/cotizacion/${currentThemeData.slug}`} size={256} level="H" includeMargin={true} />
+            <div ref={qrRef} className="p-4 bg-white rounded-lg shadow-inner border border-gray-200">
+              <QRCodeCanvas
+                value={`https://www.solifood.site/cotizacion/${currentThemeData.slug}`}
+                size={256}
+                level="H"
+                includeMargin={true}
+              />
+            </div>
+
+            <div className="text-center w-full space-y-4">
+              <div>
+                <p className="text-sm text-gray-600 font-bold">{currentThemeData.project}</p>
+                <p className="text-xs text-blue-600 truncate max-w-[250px] mx-auto">
+                  solifood.site/cotizacion/{currentThemeData.slug}
+                </p>
               </div>
-              <div className="text-center">
-                <p className="text-sm text-gray-600 font-medium mb-1">{currentThemeData.project}</p>
-                <Button onClick={() => setShowQR(false)} className="w-full mt-4">Cerrar</Button>
+
+              <div className="flex flex-col gap-2">
+                <Button
+                  onClick={() => {
+                    const canvas = qrRef.current.querySelector('canvas');
+                    if (canvas) {
+                      generateQRAsPDF(canvas, {
+                        project: currentThemeData.project,
+                        client: currentThemeData.client,
+                        slug: currentThemeData.slug
+                      });
+                      toast({ title: "PDF Generado", description: "Buscando descarga..." });
+                    }
+                  }}
+                  className="w-full bg-primary text-white hover:bg-primary/90"
+                >
+                  <Download className="w-4 h-4 mr-2" /> Exportar PDF del QR
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowQR(false)}
+                  className="w-full border-gray-300 text-gray-700 hover:bg-gray-50"
+                >
+                  Cerrar
+                </Button>
               </div>
             </div>
           </div>
-        )
-      }
-    </AnimatePresence >
+        </div>
+      )}
+    </AnimatePresence>
   );
 };
 

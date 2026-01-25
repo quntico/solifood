@@ -32,8 +32,8 @@ const formatCurrency = (value, currency = 'USD') => {
 const addClientHeader = async (doc, quotationData, margin) => {
   const pageWidth = doc.internal.pageSize.width;
 
-  // Logo SMQ
-  const logoUrl = '/smq-logo.png'; // Assumes file is in public folder
+  // Logo SOLIFOOD
+  const logoUrl = '/solifood-logo.png'; // Assumes file is in public folder
   try {
     const logoBase64 = await toBase64(logoUrl);
     if (logoBase64) {
@@ -87,7 +87,7 @@ const addFooter = (doc) => {
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(100, 100, 100);
-  const text = "www.solimaq.mx";
+  const text = "www.solifood.mx";
   doc.text(text, pageWidth / 2, pageHeight - 25, { align: 'center' });
 };
 
@@ -290,14 +290,14 @@ export const generateFichasTecnicasPDF = async (fichas, quotationData) => {
     if (!logoAdded) {
       doc.setFontSize(24);
       doc.setFont('helvetica', 'bold');
-      doc.setTextColor(0, 160, 255); // Cyan-ish Blue
-      doc.text('SMQ', margin, 20);
+      doc.setTextColor(255, 214, 10); // Solifood Yellow
+      doc.text('SOLIFOOD', margin, 20);
     }
 
     // Header Title
     doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(155, 212, 40); // Solimaq Green
+    doc.setTextColor(255, 214, 10); // Solifood Yellow
     // Align vertically roughly with logo center (approx Y=20 for 30mm height)
     doc.text('FICHAS TÉCNICAS', pageWidth - margin, 20, { align: 'right' });
 
@@ -337,7 +337,7 @@ export const generateFichasTecnicasPDF = async (fichas, quotationData) => {
 
     // Title Bar Background (Reduced height to 8mm)
     const titleBarHeight = 8;
-    doc.setFillColor(155, 212, 40); // Solimaq Green
+    doc.setFillColor(255, 214, 10); // Solifood Yellow
     // Draw rect starting at cursorY
     doc.rect(margin, cursorY, pageWidth - (margin * 2), titleBarHeight, 'F');
 
@@ -366,7 +366,7 @@ export const generateFichasTecnicasPDF = async (fichas, quotationData) => {
     const fichaTableStyles = {
       theme: 'grid',
       headStyles: {
-        fillColor: [155, 212, 40], // Solimaq Green
+        fillColor: [255, 214, 10], // Solifood Yellow
         textColor: 0, // Black text on green
         fontStyle: 'bold',
         halign: 'left',
@@ -427,10 +427,76 @@ export const generateFichasTecnicasPDF = async (fichas, quotationData) => {
       });
       cursorY = doc.autoTable.previous.finalY + 20;
     }
-
-    cursorY += 10; // Extra spacing between Fichas
+    addFooter(doc);
+    doc.save(`Fichas_Tecnicas_${quotationData.project.replace(/\s/g, '_')}.pdf`);
   }
+};
 
+export const generateQRAsPDF = async (qrCanvas, projectData) => {
+  const { project, client, slug } = projectData;
+  const url = `https://www.solifood.site/cotizacion/${slug}`;
+
+  const doc = new jsPDF('p', 'pt', 'a4');
+  const pageWidth = doc.internal.pageSize.width;
+  const pageHeight = doc.internal.pageSize.height;
+  const margin = 40;
+
+  // 1. Header with Branding
+  doc.setFillColor(0, 0, 0);
+  doc.rect(0, 0, pageWidth, 60, 'F');
+
+  doc.setFontSize(22);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(255, 214, 10); // Solifood Yellow
+  doc.text('SOLIFOOD', margin, 38);
+
+  doc.setFontSize(14);
+  doc.text('ACCESO A COTIZACIÓN', pageWidth - margin, 38, { align: 'right' });
+
+  // 2. Project Info
+  let cursorY = 100;
+  doc.setFontSize(14);
+  doc.setTextColor(0, 0, 0);
+  doc.text(`PROYECTO: ${project || 'N/A'}`, margin, cursorY);
+  cursorY += 20;
+  doc.setFontSize(11);
+  doc.setTextColor(100, 100, 100);
+  doc.text(`CLIENTE: ${client || 'N/A'}`, margin, cursorY);
+
+  // 3. The QR Code
+  // Get image from canvas
+  const qrImage = qrCanvas.toDataURL('image/png');
+  const qrSize = 300;
+  const qrX = (pageWidth - qrSize) / 2;
+  const qrY = cursorY + 40;
+
+  doc.addImage(qrImage, 'PNG', qrX, qrY, qrSize, qrSize);
+
+  // 4. Link and Call to Action
+  cursorY = qrY + qrSize + 40;
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
+  doc.text('ESCANEA EL CÓDIGO O HAZ CLIC EN EL ENLACE:', pageWidth / 2, cursorY, { align: 'center' });
+
+  cursorY += 25;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(0, 82, 204); // Unified Link Blue
+
+  // Add actual clickable link
+  doc.textWithLink(url, pageWidth / 2, cursorY, {
+    url: url,
+    align: 'center'
+  });
+
+  // Underline for the link
+  const linkWidth = doc.getStringUnitWidth(url) * doc.getFontSize();
+  doc.setDrawColor(0, 82, 204);
+  doc.line((pageWidth - linkWidth) / 2, cursorY + 2, (pageWidth + linkWidth) / 2, cursorY + 2);
+
+  // 5. Footer
   addFooter(doc);
-  doc.save(`Fichas_Tecnicas_${quotationData.project.replace(/\s/g, '_')}.pdf`);
+
+  doc.save(`QR_SOLIFOOD_${project.replace(/\s/g, '_')}.pdf`);
 };

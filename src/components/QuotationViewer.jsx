@@ -220,7 +220,13 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
       sections_config: mergeWithDefaults(initialQuotationData.sections_config, initialQuotationData.theme_key),
     };
     const initialThemes = isAdminView ? allThemes : { [initialQuotationData.theme_key]: processedData };
-    setThemes(initialThemes);
+
+    // FIXED: Only set themes if we don't have them yet or if we aren't in admin mode
+    // In admin mode, we want to keep our local 'themes' state which might have new clones
+    setThemes(prev => {
+      if (isAdminView && Object.keys(prev).length > 0) return prev;
+      return initialThemes;
+    });
 
     if (isAdminView) {
       const savedTheme = localStorage.getItem('activeTheme');
@@ -460,39 +466,54 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
     const newConfigArray = Array.isArray(newConfig) ? newConfig : [];
 
     try {
-      // [FIX] CONSTRUCT PAYLOAD OUTSIDE setThemes to avoid race conditions
-      const currentTheme = themes[activeTheme];
-      const fullConfigRaw = currentTheme?.sections_config;
-      const fullArrayByVal = Array.isArray(fullConfigRaw) ? fullConfigRaw : (fullConfigRaw?.sections || defaultSections);
+      let wrappedPayload;
 
-      let finalConfigArray;
-      if (newConfigArray.length < fullArrayByVal.length && newConfigArray.length > 0) {
-        const newIds = new Set(newConfigArray.map(s => s.id));
-        const excludedItems = fullArrayByVal.filter(s => !newIds.has(s.id));
-        finalConfigArray = [...newConfigArray, ...excludedItems];
-      } else {
-        finalConfigArray = newConfigArray;
+      // 1. Update Local State (Functional Update to ensure we have latest themes)
+      setThemes(prevThemes => {
+        const currentTheme = prevThemes[activeTheme];
+        if (!currentTheme) return prevThemes;
+
+        const fullConfigRaw = currentTheme.sections_config;
+        const fullArrayByVal = Array.isArray(fullConfigRaw) ? fullConfigRaw : (fullConfigRaw?.sections || defaultSections);
+
+        let finalConfigArray;
+        if (newConfigArray.length < fullArrayByVal.length && newConfigArray.length > 0) {
+          const newIds = new Set(newConfigArray.map(s => s.id));
+          const excludedItems = fullArrayByVal.filter(s => !newIds.has(s.id));
+          finalConfigArray = [...newConfigArray, ...excludedItems];
+        } else {
+          finalConfigArray = newConfigArray;
+        }
+
+        const sanitizedConfig = finalConfigArray.map(({ Component, subItems, ...rest }) => rest);
+        const config_raw = currentTheme.sections_config || {};
+
+        // [FIX] RESOLUCIÓN ROBUSTA DE VIDEO
+        const currentVideoUrl = currentTheme.video_url || (config_raw && !Array.isArray(config_raw) ? config_raw.heroVideoUrl : null) || initialQuotationData.video_url;
+
+        wrappedPayload = {
+          ...(typeof config_raw === 'object' && !Array.isArray(config_raw) ? config_raw : {}),
+          sections: sanitizedConfig,
+          heroVideoUrl: currentVideoUrl,
+          updated_at: new Date().toISOString()
+        };
+
+        return {
+          ...prevThemes,
+          [activeTheme]: {
+            ...currentTheme,
+            sections_config: wrappedPayload
+          },
+        };
+      });
+
+      // 2. Persist to Supabase (Wait a tick to ensure wrappedPayload is assigned from the functional update above)
+      // Actually, since wrappedPayload is defined in the outer scope, it will be populated by the sync part of the functional update.
+      if (!wrappedPayload) {
+        console.error("[QuotationViewer] Failed to construct payload for save");
+        return;
       }
 
-      const sanitizedConfig = finalConfigArray.map(({ Component, subItems, ...rest }) => rest);
-      const config_raw = currentTheme?.sections_config || {};
-      const wrappedPayload = {
-        ...(typeof config_raw === 'object' && !Array.isArray(config_raw) ? config_raw : {}),
-        sections: sanitizedConfig,
-        heroVideoUrl: currentTheme?.video_url || initialQuotationData.video_url,
-        updated_at: new Date().toISOString()
-      };
-
-      // 1. Update Local State (Immediate)
-      setThemes(prevThemes => ({
-        ...prevThemes,
-        [activeTheme]: {
-          ...prevThemes[activeTheme],
-          sections_config: wrappedPayload
-        },
-      }));
-
-      // 2. Persist to Supabase
       const { error } = await supabase
         .from('quotations')
         .update({ sections_config: wrappedPayload })
@@ -653,7 +674,10 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
     // Actually, safer to update it here and call if we want custom behavior.
 
     const updatedDate = new Date().toISOString();
+    const config_raw = themes[activeTheme]?.sections_config || {};
+
     const wrappedPayload = {
+      ...(typeof config_raw === 'object' && !Array.isArray(config_raw) ? config_raw : {}),
       sections: fullArray.map(({ Component, subItems, ...rest }) => rest),
       heroVideoUrl: newUrl,
       updated_at: updatedDate
