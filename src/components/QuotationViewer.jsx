@@ -414,9 +414,35 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
       setIsHeaderScrolled(scrollContainer.scrollTop > 50);
     };
 
+    // Intersection Observer to update activeSection based on scroll
+    const observerOptions = {
+      root: scrollContainer,
+      threshold: 0.2,
+      rootMargin: '-10% 0px -70% 0px' // Focus on top-ish of the viewport
+    };
+
+    const observerCallback = (entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          setActiveSection(entry.target.id);
+        }
+      });
+    };
+
+    const observer = new IntersectionObserver(observerCallback, observerOptions);
+
+    // We observe all sections that are rendered in MainContent
+    // Since sections can change, we might need to re-run this when visibleSections change
+    // For now, let's just use a MutationObserver or a delay to wait for items
+    const sectionsToObserve = scrollContainer.querySelectorAll('section[id]');
+    sectionsToObserve.forEach(section => observer.observe(section));
+
     scrollContainer.addEventListener('scroll', handleScroll);
-    return () => scrollContainer.removeEventListener('scroll', handleScroll);
-  }, []);
+    return () => {
+      scrollContainer.removeEventListener('scroll', handleScroll);
+      observer.disconnect();
+    };
+  }, [isHydrated, activeTheme]); // Re-run when sections might change
 
   useEffect(() => {
     if (displayData) {
@@ -775,6 +801,7 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
           <MasterPlan
             isSubmenuMode={true}
             slug={`mp-${activeTheme}`}
+            parentSlug={activeTheme}
             legacySlug="master-plan-concentrado"
             isAdmin={isEditorMode && isAdminView}
             isAdminAuthenticated={isAdminAuthenticated && isAdminView}

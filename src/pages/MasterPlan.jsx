@@ -43,7 +43,7 @@ const uid = () => Math.random().toString(16).slice(2) + Date.now().toString(16);
 const initialSections = [
     {
         id: "sec_cacao",
-        titulo: "1. Línea de cacao (desde grano) · Selección → Tostado → Descascarillado → Molienda → Prensado",
+        titulo: "Línea de cacao (desde grano) · Selección → Tostado → Descascarillado → Molienda → Prensado",
         tag: "Oferta LST · Bean to Powder 200–300 kg/h",
         items: [
             { id: uid(), activo: true, codigo: "1.1", equipo: "Máquina seleccionadora de grano de cacao", descripcion: "Separación/limpieza por etapas (winnowing) para eficiencia.", fuente: "LST", qty: 1, costoUSD: 5000, ventaUSD: 0, utilidad: 10 },
@@ -71,7 +71,7 @@ const initialSections = [
         id: "sec_polvo_bebida",
         collapsed: true,
         summaryDesc: "",
-        titulo: "2. Chocolate en polvo para bebida (mezcla con leche) · Formulación → Mezclado → (Opcional) Instantizado",
+        titulo: "Chocolate en polvo para bebida (mezcla con leche) · Formulación → Mezclado → (Opcional) Instantizado",
         tag: "Pendiente de cotizar (requerido para tu SKU de bebida)",
         items: [
             { id: uid(), activo: true, codigo: "2.1", equipo: "Tolvas para azúcar / leche en polvo / cacao en polvo base", descripcion: "Almacenamiento y alimentación controlada de ingredientes secos.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0, utilidad: 10 },
@@ -86,7 +86,7 @@ const initialSections = [
         id: "sec_empaque_polvo",
         collapsed: true,
         summaryDesc: "",
-        titulo: "3. Empaque de polvos · Bolsa 400 g",
+        titulo: "Empaque de polvos · Bolsa 400 g",
         tag: "Oferta PKW-130",
         items: [
             { id: uid(), activo: true, codigo: "3.1", equipo: "Línea de empaquetado de polvos PKW-130 (completa)", descripcion: "Empaque para chocolate en polvo (bolsa 400 g). Total oferta: 29,000 USD.", fuente: "PKW-130", qty: 1, costoUSD: 29000, ventaUSD: 0, utilidad: 10 },
@@ -96,7 +96,7 @@ const initialSections = [
         id: "sec_tabletas",
         collapsed: true,
         summaryDesc: "",
-        titulo: "4. Tabletas (2 líneas) · Templado → Moldeo → Vibrado → Enfriado → Desmolde",
+        titulo: "Tabletas (2 líneas) · Templado → Moldeo → Vibrado → Enfriado → Desmolde",
         tag: "Oferta Mini Chocolate Molding Line (ajustada a 2 líneas) + 1 Foil",
         items: [
             { id: uid(), activo: true, codigo: "4.1", equipo: "Fundidor de grasa/manteca (fat melter)", descripcion: "Tanque 1000 L con pesaje + bomba (según oferta).", fuente: "Mini Molding", qty: 1, costoUSD: 8800, ventaUSD: 0, utilidad: 10 },
@@ -119,7 +119,7 @@ const initialSections = [
         id: "sec_hex",
         collapsed: false,
         summaryDesc: "",
-        titulo: "5. Empaque de tabletas hexagonales · Encartonado hex",
+        titulo: "Empaque de tabletas hexagonales · Encartonado hex",
         tag: "Pendiente de cotizar (tu otra presentación)",
         items: [
             { id: uid(), activo: true, codigo: "5.1", equipo: "Formadora/encartonadora de caja hexagonal", descripcion: "Formado y cierre de caja hex.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0, utilidad: 10 },
@@ -131,7 +131,7 @@ const initialSections = [
         id: "sec_utilidades",
         collapsed: false,
         summaryDesc: "",
-        titulo: "6. Utilidades mínimas (planta)",
+        titulo: "Utilidades mínimas (planta)",
         tag: "Pendiente (no inflar: queda en 0 hasta cotizar)",
         items: [
             { id: uid(), activo: true, codigo: "6.1", equipo: "Aire comprimido (compresor + secador + tanque)", descripcion: "Actuadores y empaque.", fuente: "Pendiente", qty: 1, costoUSD: 0, ventaUSD: 0, utilidad: 10 },
@@ -141,9 +141,22 @@ const initialSections = [
     },
 ];
 
-export default function MasterPlan({ slug: propSlug, legacySlug, isSubmenuMode = false, isAdmin: propIsAdmin, isAdminAuthenticated: propIsAdminAuth }) {
+const cleanTitle = (text) => {
+    if (!text) return "";
+    let clean = text;
+    // Bucle para quitar múltiples prefijos numéricos ej: "1. 1. 2. Título"
+    while (/^\d+[\.\-\)]?\s*/.test(clean)) {
+        clean = clean.replace(/^\d+[\.\-\)]?\s*/, "");
+    }
+    return clean.trim().toUpperCase();
+};
+
+export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isSubmenuMode = false, isAdmin: propIsAdmin, isAdminAuthenticated: propIsAdminAuth }) {
     const { slug: paramsSlug } = useParams();
-    const CLOUD_SLUG = propSlug || paramsSlug || DEFAULT_CLOUD_SLUG;
+    // UNIVERSAL SLUG RESOLVER: Ensure Master Plan records are ALWAYS prefixed with mp-
+    // regardless of whether they come from props (QuotationViewer) or params (standalone route)
+    const baseSlug = propSlug || paramsSlug || DEFAULT_CLOUD_SLUG;
+    const CLOUD_SLUG = baseSlug.startsWith('mp-') ? baseSlug : `mp-${baseSlug}`;
     const navigate = useNavigate();
     const { toast } = useToast();
     const [horasDia, setHorasDia] = useState(16);
@@ -232,7 +245,7 @@ export default function MasterPlan({ slug: propSlug, legacySlug, isSubmenuMode =
             const raw = localStorage.getItem(STORAGE_KEY);
             if (!raw) return initialSections;
             const parsed = JSON.parse(raw);
-            return parsed?.length ? parsed : initialSections;
+            return (Array.isArray(parsed) && parsed.length > 0) ? parsed : initialSections;
         } catch { return initialSections; }
     });
 
@@ -299,10 +312,43 @@ export default function MasterPlan({ slug: propSlug, legacySlug, isSubmenuMode =
 
             if (error && error.code !== 'PGRST116') throw error;
 
-            if (data) {
-                const config = data.sections_config || {};
-                console.log("[MasterPlan] Cloud data found:", data);
+            let finalData = data;
 
+            // FALLBACK TO PARENT SLUG if current slug is empty (Inherit from main quote)
+            if (!finalData && parentSlug && parentSlug !== CLOUD_SLUG) {
+                console.log("[MasterPlan] No specific data found, trying parent fallback:", parentSlug);
+                const { data: pData, error: pError } = await supabase
+                    .from('quotations')
+                    .select('*')
+                    .eq('slug', parentSlug)
+                    .single();
+
+                if (!pError && pData) {
+                    finalData = pData;
+                    console.log("[MasterPlan] Using parent fallback data for metadata.");
+                }
+            }
+
+            // FALLBACK TO LEGACY/GENERAL if still empty
+            if (!finalData && legacySlug && legacySlug !== CLOUD_SLUG) {
+                console.log("[MasterPlan] No specific data found, trying legacy fallback:", legacySlug);
+                const { data: legacyData, error: legacyError } = await supabase
+                    .from('quotations')
+                    .select('*')
+                    .eq('slug', legacySlug)
+                    .single();
+
+                if (!legacyError && legacyData) {
+                    finalData = legacyData;
+                    console.log("[MasterPlan] Using legacy fallback data.");
+                }
+            }
+
+            if (finalData) {
+                console.log("[MasterPlan] Hydrating from Cloud Slug:", CLOUD_SLUG);
+                const config = finalData.sections_config || {};
+
+                // [METADATA SYNC] Always update metadata if present
                 if (config.clientName) setClientName(config.clientName);
                 if (config.projectName) setProjectName(config.projectName);
                 if (config.projectDesc) setProjectDesc(config.projectDesc);
@@ -310,15 +356,10 @@ export default function MasterPlan({ slug: propSlug, legacySlug, isSubmenuMode =
                 if (config.mpTitle) setMpTitle(config.mpTitle);
                 if (config.mpSubTitle) setMpSubTitle(config.mpSubTitle);
                 if (config.logoUrl) setLogoUrl(config.logoUrl);
-                else if (data.logo_url) setLogoUrl(data.logo_url);
+                else if (finalData.logo_url) setLogoUrl(finalData.logo_url);
 
-                // HYDRATION PROTECTION: Check both column and config
-                const cloudVideoUrl = data.video_url || config.heroVideoUrl;
-                if (cloudVideoUrl) {
-                    setHeroVideoUrl(cloudVideoUrl);
-                } else {
-                    console.log("[MasterPlan] No cloud video found, keeping local:", heroVideoUrl);
-                }
+                const cloudVideoUrl = finalData.video_url || config.heroVideoUrl;
+                if (cloudVideoUrl) setHeroVideoUrl(cloudVideoUrl);
 
                 if (config.heroVideoIsIntegrated !== undefined) setHeroVideoIsIntegrated(config.heroVideoIsIntegrated);
                 if (config.heroVideoScale) setHeroVideoScale(config.heroVideoScale);
@@ -326,18 +367,31 @@ export default function MasterPlan({ slug: propSlug, legacySlug, isSubmenuMode =
                 if (config.heroVideoBorderRadius) setHeroVideoBorderRadius(config.heroVideoBorderRadius);
                 if (config.tableFontSize) setTableFontSize(config.tableFontSize);
 
-                // UNIVERSAL RESOLVER: Handle sections if wrapped in an object
-                const sectionsToSet = Array.isArray(config.sections) ? config.sections : (Array.isArray(config) ? config : null);
-                if (sectionsToSet) setSections(sectionsToSet);
+                // [STRUCTURE HYDRATION] Only load sections if this is the SPECIFIC Master Plan record
+                // Do NOT inherit module structure from the parent quotation (it's a different schema)
+                if (finalData.slug === CLOUD_SLUG) {
+                    const sectionsToSet = Array.isArray(config.sections) ? config.sections : (Array.isArray(config) ? config : null);
+                    if (sectionsToSet && sectionsToSet.length > 0) {
+                        const cleanedSections = sectionsToSet.map(s => ({ ...s, titulo: cleanTitle(s.titulo) }));
+                        if (!isAdmin) {
+                            setSections(cleanedSections);
+                            console.log("[MasterPlan] Structure loaded from cloud.");
+                        } else {
+                            console.log("[MasterPlan] Admin mode: skipping cloud overwrite of local modules.");
+                        }
+                    }
+                } else {
+                    console.log("[MasterPlan] This is a metadata-only fallback. Keeping default/local structure.");
+                }
 
                 setLastCloudSync(new Date());
             } else {
-                console.log("[MasterPlan] No cloud data, using defaults.");
+                console.log("[MasterPlan] No cloud data found.");
             }
             setIsHydrated(true);
         } catch (error) {
             console.error("Error fetching cloud data:", error);
-            setIsHydrated(true); // Still hydrate to allow local edits if cloud fails
+            setIsHydrated(true);
         }
     };
 
@@ -361,72 +415,58 @@ export default function MasterPlan({ slug: propSlug, legacySlug, isSubmenuMode =
         const currentVideoUrl = overrideConfig ? overrideConfig.heroVideoUrl : heroVideoUrl;
 
         try {
-            console.log("[MasterPlan] Saving to cloud...", configToSave);
-            // Try to update with all columns
-            const { error: updateError } = await supabase
+            console.log("[MasterPlan] Saving to cloud...", CLOUD_SLUG, configToSave);
+
+            // [ROBUST SAVE] Use upsert to guarantee creation if it doesn't exist
+            // We combine the upsert logic to handle both existing and new records in one call.
+            const { error: saveError } = await supabase
                 .from('quotations')
-                .update({
+                .upsert({
+                    slug: CLOUD_SLUG,
+                    theme_key: `mp_${uid()}`,
                     sections_config: configToSave,
                     video_url: currentVideoUrl,
+                    logo_url: configToSave.logoUrl || logoUrl,
                     updated_at: updatedDate,
                     project: configToSave.projectName || projectName,
                     client: configToSave.clientName || clientName,
-                    logo_url: configToSave.logoUrl || logoUrl
-                })
-                .eq('slug', CLOUD_SLUG);
+                    title: configToSave.mpTitle || mpTitle,
+                    is_home: false
+                }, { onConflict: 'slug' });
 
-            if (updateError) {
-                console.warn("[MasterPlan] Primary update failed (could be missing column or slug):", updateError);
+            if (saveError) {
+                console.warn("[MasterPlan] Primary upsert failed, retrying without extended columns:", saveError);
+                // Fallback for older DB schemas
+                const { error: fallbackError } = await supabase
+                    .from('quotations')
+                    .upsert({
+                        slug: CLOUD_SLUG,
+                        theme_key: `mp_${uid()}`,
+                        sections_config: configToSave,
+                        updated_at: updatedDate,
+                        project: configToSave.projectName || projectName,
+                        client: configToSave.clientName || clientName,
+                        title: configToSave.mpTitle || mpTitle,
+                        is_home: false
+                    }, { onConflict: 'slug' });
 
-                // If the error is about missing column (42703 or PGRST204), try saving WITHOUT video_url/logo_url columns
-                if (updateError.code === '42703' || updateError.code === 'PGRST204') {
-                    console.log("[MasterPlan] missing columns, falling back to config only...");
-                    const { error: fallbackError } = await supabase
-                        .from('quotations')
-                        .update({
-                            sections_config: configToSave,
-                            updated_at: updatedDate,
-                            project: configToSave.projectName || projectName,
-                            client: configToSave.clientName || clientName
-                        })
-                        .eq('slug', CLOUD_SLUG);
+                if (fallbackError) throw fallbackError;
+            }
 
-                    if (fallbackError) throw fallbackError;
-                } else {
-                    // Try to upsert/insert if slug not found
-                    const { error: insertError } = await supabase
-                        .from('quotations')
-                        .upsert({
-                            slug: CLOUD_SLUG,
-                            theme_key: `mp_${uid()}`,
-                            sections_config: configToSave,
-                            video_url: currentVideoUrl,
-                            logo_url: configToSave.logoUrl || logoUrl,
-                            updated_at: updatedDate,
-                            project: configToSave.projectName || projectName,
-                            client: configToSave.clientName || clientName,
-                            title: configToSave.mpTitle || mpTitle,
-                            is_home: false
-                        }, { onConflict: 'slug' });
-
-                    if (insertError) {
-                        console.warn("[MasterPlan] Upsert failed, retrying without extended columns...");
-                        const { error: insertFallbackError } = await supabase
-                            .from('quotations')
-                            .upsert({
-                                slug: CLOUD_SLUG,
-                                theme_key: `mp_${uid()}`,
-                                sections_config: configToSave,
-                                updated_at: updatedDate,
-                                project: configToSave.projectName || projectName,
-                                client: configToSave.clientName || clientName,
-                                title: configToSave.mpTitle || mpTitle,
-                                is_home: false
-                            }, { onConflict: 'slug' });
-
-                        if (insertFallbackError) throw insertFallbackError;
-                    }
-                }
+            // [DUAL SYNC] If we have a parentSlug (like in integrated mode), push metadata to the parent row
+            // so Header and Portada stay updated.
+            const targetParent = parentSlug || (CLOUD_SLUG.startsWith('mp-') ? CLOUD_SLUG.replace('mp-', '') : null);
+            if (targetParent && targetParent !== CLOUD_SLUG) {
+                console.log("[MasterPlan] Propagating metadata to parent row:", targetParent);
+                await supabase
+                    .from('quotations')
+                    .update({
+                        project: configToSave.projectName || projectName,
+                        client: configToSave.clientName || clientName,
+                        logo_url: configToSave.logoUrl || logoUrl,
+                        updated_at: updatedDate
+                    })
+                    .eq('slug', targetParent);
             }
 
             setLastCloudSync(new Date());
@@ -455,7 +495,8 @@ export default function MasterPlan({ slug: propSlug, legacySlug, isSubmenuMode =
                 const config = data.sections_config || {};
                 const sectionsToSet = Array.isArray(config.sections) ? config.sections : (Array.isArray(config) ? config : null);
                 if (sectionsToSet) {
-                    setSections(sectionsToSet);
+                    const cleanedSections = sectionsToSet.map(s => ({ ...s, titulo: cleanTitle(s.titulo) }));
+                    setSections(cleanedSections);
                     toast({ title: "Datos Recuperados", description: "Se han importado los datos del Master Plan General." });
                 }
             }
@@ -573,7 +614,7 @@ export default function MasterPlan({ slug: propSlug, legacySlug, isSubmenuMode =
                 clientName, projectName, projectDesc, projectDate,
                 mpTitle, mpSubTitle, logoUrl: publicUrl, heroVideoUrl,
                 heroVideoIsIntegrated, heroVideoScale, heroVideoBorderRadius,
-                tableFontSize, sections
+                tableFontSize, sections: sections // Explicitly ensuring sections are included
             };
             await saveToCloud(updatedConfig);
 
@@ -599,9 +640,9 @@ export default function MasterPlan({ slug: propSlug, legacySlug, isSubmenuMode =
             // Pass the literal updated config to avoid stale state in saveToCloud
             const updatedConfig = {
                 clientName, projectName, projectDesc, projectDate,
-                mpTitle, mpSubTitle, heroVideoUrl: publicUrl, heroVideoIsIntegrated,
-                heroVideoScale, heroVideoBorderRadius,
-                sections
+                mpTitle, mpSubTitle, logoUrl, heroVideoUrl: publicUrl,
+                heroVideoIsIntegrated, heroVideoScale, heroVideoBorderRadius,
+                tableFontSize, sections: sections
             };
             await saveToCloud(updatedConfig);
 
@@ -610,6 +651,77 @@ export default function MasterPlan({ slug: propSlug, legacySlug, isSubmenuMode =
             console.error(error);
             toast({ title: "Error", description: "No se pudo subir el video.", variant: "destructive" });
         } finally { setUploadingId(null); }
+    };
+
+    const handleBulkMediaUpload = async (files) => {
+        if (!files || files.length === 0) return;
+        setIsCloudSyncing(true);
+        const total = files.length;
+        let count = 0;
+        let nextSections = [...sections];
+
+        try {
+            const bucket = await getActiveBucket();
+
+            for (const file of files) {
+                // Regex para extraer el CÓDIGO (ej: "1.1", "1.10", "1.1.2") al inicio del nombre del archivo
+                const match = file.name.match(/^(\d+(?:\.\d+)*)/);
+                if (!match) {
+                    console.log(`[MasterPlan Bulk] Ignorando archivo sin código válido: ${file.name}`);
+                    continue;
+                }
+                const itemCode = match[1];
+                const mediaType = file.type.startsWith('video/') ? 'video' : 'image';
+
+                // Buscar el ítem en todas las secciones
+                let found = false;
+                for (let sIdx = 0; sIdx < nextSections.length; sIdx++) {
+                    const section = nextSections[sIdx];
+                    const itemIdx = section.items.findIndex(it => it.codigo === itemCode);
+                    if (itemIdx !== -1) {
+                        const itemId = section.items[itemIdx].id;
+                        const fileExt = file.name.split('.').pop();
+                        const fileName = `bulk_item_${section.id}_${itemId}_${Date.now()}.${fileExt}`;
+                        const filePath = `masterplan/${fileName}`;
+
+                        const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file);
+                        if (uploadError) throw uploadError;
+
+                        const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filePath);
+
+                        // Actualizar la copia de secciones
+                        nextSections[sIdx] = {
+                            ...section,
+                            items: section.items.map(it => it.id === itemId ? { ...it, media_url: publicUrl, media_type: mediaType } : it)
+                        };
+                        found = true;
+                        count++;
+                        break;
+                    }
+                }
+                if (!found) console.log(`[MasterPlan Bulk] No se encontró ítem para el código: ${itemCode}`);
+            }
+
+            setSections(nextSections);
+
+            const updatedConfig = {
+                clientName, projectName, projectDesc, projectDate,
+                mpTitle, mpSubTitle, logoUrl, heroVideoUrl,
+                heroVideoIsIntegrated, heroVideoScale, heroVideoBorderRadius,
+                tableFontSize, sections: nextSections
+            };
+            await saveToCloud(updatedConfig);
+
+            toast({
+                title: "Carga Masiva Completada",
+                description: `Se han procesado ${count} de ${total} imágenes correctamente.`
+            });
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error en Carga Masiva", description: "Ocurrió un error al procesar los archivos.", variant: "destructive" });
+        } finally {
+            setIsCloudSyncing(false);
+        }
     };
 
     const handleItemMediaUpload = async (sectionId, itemId, file) => {
@@ -1065,7 +1177,7 @@ export default function MasterPlan({ slug: propSlug, legacySlug, isSubmenuMode =
                     id: `sec_${uid()}`,
                     collapsed: true,
                     summaryDesc: "",
-                    titulo: modName,
+                    titulo: cleanTitle(modName), // Apply cleanTitle here
                     tag: modName.substring(0, 3).toUpperCase(),
                     items: groups[modName].map(row => ({
                         id: uid(),
@@ -1107,7 +1219,7 @@ export default function MasterPlan({ slug: propSlug, legacySlug, isSubmenuMode =
                 const groups = {};
                 data.forEach(row => { const p = row["MODULO"] || "SIN CATEGORIA"; if (!groups[p]) groups[p] = []; groups[p].push(row); });
                 setSections(Object.keys(groups).map((p, idx) => ({
-                    id: `sec_${uid()}`, collapsed: true, summaryDesc: "", titulo: p, tag: p.substring(0, 3).toUpperCase(),
+                    id: `sec_${uid()}`, collapsed: true, summaryDesc: "", titulo: cleanTitle(p), tag: p.substring(0, 3).toUpperCase(), // Apply cleanTitle here
                     items: groups[p].map(row => ({
                         id: uid(), activo: true, codigo: row["NUM."] || "", equipo: row["EQUIPO"] || "Sin nombre", descripcion: row["DESCRIPCIÓN"] || "",
                         fuente: row["FUENTE"] || "LST", utilidad: row["UTILIDAD %"] || 10, qty: row["QTY"] || 1, costoUSD: row["COSTO (USD)"] || 0, ventaUSD: 0
@@ -1348,8 +1460,8 @@ export default function MasterPlan({ slug: propSlug, legacySlug, isSubmenuMode =
                 )}
 
                 {/* Sub-Header Actions */}
-                <div className="flex items-center justify-between mb-8">
-                    <div className="flex gap-2">
+                <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 mb-8">
+                    <div className="flex flex-wrap gap-2 items-center">
                         {isAdmin && (
                             <button
                                 onClick={() => setIsTemplateEditorOpen(true)}
@@ -1370,6 +1482,33 @@ export default function MasterPlan({ slug: propSlug, legacySlug, isSubmenuMode =
                             </button>
                         )}
 
+                        {isAdmin && (
+                            <>
+                                <button
+                                    onClick={handleMasterExportExcel}
+                                    className="px-6 py-2 bg-zinc-900 border border-green-500/30 text-green-400 hover:border-green-500/50 font-black rounded-xl text-[10px] tracking-widest uppercase transition-all flex items-center gap-2"
+                                    title="Exportar TODO el Master Plan"
+                                >
+                                    <Download size={14} />
+                                    Master Excel
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        const inp = document.createElement('input');
+                                        inp.type = 'file';
+                                        inp.accept = '.xlsx, .xls';
+                                        inp.onchange = (e) => handleMasterImportExcel(e.target.files[0]);
+                                        inp.click();
+                                    }}
+                                    className="px-6 py-2 bg-zinc-900 border border-blue-500/30 text-blue-400 hover:border-blue-500/50 font-black rounded-xl text-[10px] tracking-widest uppercase transition-all flex items-center gap-2"
+                                    title="Importar TODO el Master Plan"
+                                >
+                                    <FileSpreadsheet size={14} />
+                                    Cargar Master
+                                </button>
+                            </>
+                        )}
+
                         <button
                             onClick={toggleAdmin}
                             className={`px-6 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2 ${isAdmin ? 'border-red-500/50 bg-red-500/10 text-red-500' : 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20'}`}
@@ -1378,7 +1517,7 @@ export default function MasterPlan({ slug: propSlug, legacySlug, isSubmenuMode =
                         </button>
 
                         {isAdmin && (
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-wrap items-center gap-3">
                                 <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl p-1 shadow-inner">
                                     <div className="flex items-center gap-2 px-2 border-r border-white/5">
                                         <span className="text-[8px] font-black text-gray-500 uppercase tracking-tighter">UTILIDAD:</span>
@@ -1427,12 +1566,34 @@ export default function MasterPlan({ slug: propSlug, legacySlug, isSubmenuMode =
                                 </button>
 
                                 <button
-                                    onClick={() => saveToCloud()}
+                                    onClick={() => {
+                                        const inp = document.createElement('input');
+                                        inp.type = 'file';
+                                        inp.multiple = true;
+                                        inp.accept = 'image/*,video/*';
+                                        inp.onchange = (e) => handleBulkMediaUpload(e.target.files);
+                                        inp.click();
+                                    }}
                                     disabled={isCloudSyncing}
-                                    className={`px-4 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2 ${isCloudSyncing ? 'bg-zinc-800 text-zinc-500 border-zinc-700' : 'border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'}`}
+                                    className={`px-4 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2 ${isCloudSyncing ? 'bg-zinc-800 text-zinc-500 border-zinc-700' : 'border-purple-500/50 bg-purple-500/20 text-purple-400 hover:bg-purple-500/30'}`}
+                                    title="Cargar múltiples imágenes usando el código como nombre (ej: 1.1.jpg)"
                                 >
-                                    {isCloudSyncing ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                                    {isCloudSyncing ? "..." : "Guardar"}
+                                    {isCloudSyncing ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
+                                    {isCloudSyncing ? "Subiendo..." : "Carga Masiva Fotos"}
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        console.log("[MasterPlan] Full cloud sync triggered...");
+                                        saveToCloud();
+                                        toast({ title: "Sincronización Exitosa", description: "Tus datos locales ahora son visibles para el cliente." });
+                                    }}
+                                    disabled={isCloudSyncing}
+                                    className={`px-4 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2 ${isCloudSyncing ? 'bg-zinc-800 text-zinc-500 border-zinc-700' : 'border-green-500/50 bg-green-500/20 text-green-400 hover:bg-green-500/30 shadow-[0_0_15px_-5px_rgba(34,197,94,0.4)]'}`}
+                                    title="Hacer que tus cambios locales sean visibles para el cliente"
+                                >
+                                    {isCloudSyncing ? <Loader2 size={12} className="animate-spin" /> : <Shield size={12} />}
+                                    {isCloudSyncing ? "..." : "Sincronizar con Cliente"}
                                 </button>
                             </div>
                         )}
@@ -1457,37 +1618,6 @@ export default function MasterPlan({ slug: propSlug, legacySlug, isSubmenuMode =
                         </div>
                         {isAdmin && <button onClick={addSection} className="px-6 py-2 bg-white/5 border border-white/10 text-white font-black rounded-xl text-[10px] tracking-widest uppercase hover:bg-white/10">+ Añadir Módulo</button>}
                     </div>
-                    {isAdmin && (
-                        <div className="flex gap-2">
-                            {/* Master Excel Functions */}
-                            <button
-                                onClick={handleMasterExportExcel}
-                                className="px-4 py-2 bg-green-500/10 border border-green-500/30 text-green-500 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-green-500/20 transition-all flex items-center gap-2"
-                                title="Exportar TODO el Master Plan"
-                            >
-                                <Download size={14} />
-                                Master Excel
-                            </button>
-                            <button
-                                onClick={() => {
-                                    const inp = document.createElement('input');
-                                    inp.type = 'file';
-                                    inp.accept = '.xlsx, .xls';
-                                    inp.onchange = (e) => handleMasterImportExcel(e.target.files[0]);
-                                    inp.click();
-                                }}
-                                className="px-4 py-2 bg-blue-500/10 border border-blue-500/30 text-blue-500 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-500/20 transition-all flex items-center gap-2"
-                                title="Importar TODO el Master Plan"
-                            >
-                                <FileSpreadsheet size={14} />
-                                Cargar Master
-                            </button>
-
-                            <button onClick={() => fileInputRef.current.click()} className="p-2 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-primary"><Upload size={18} /></button>
-                            <input type="file" ref={fileInputRef} className="hidden" onChange={handleImportExcel} />
-                            <button onClick={reset} className="p-2 bg-white/5 border border-white/10 rounded-lg text-red-500 hover:bg-red-500/10"><Loader2 size={18} /></button>
-                        </div>
-                    )}
                 </div>
 
                 <div className="space-y-12">
@@ -1664,7 +1794,7 @@ export default function MasterPlan({ slug: propSlug, legacySlug, isSubmenuMode =
                                                 <div className="px-6 py-1 flex gap-8 border-b border-white/5 bg-gradient-to-b from-white/[0.01] to-transparent">
                                                     {s.moduleImage && (
                                                         <div className="w-64 h-40 rounded-2xl overflow-hidden border border-white/10 shadow-2xl flex-shrink-0 group/modimg relative">
-                                                            <img src={s.moduleImage} className="w-full h-full object-cover grayscale group-hover/modimg:grayscale-0 transition-all duration-500" />
+                                                            <img src={s.moduleImage} className="w-full h-full object-cover group-hover/modimg:scale-105 transition-all duration-500" />
                                                             {isAdmin && (
                                                                 <button onClick={() => updateSection(s.id, { moduleImage: null })} className="absolute top-2 right-2 p-1 bg-black/50 text-white rounded-full opacity-0 group-hover/modimg:opacity-100 transition-opacity"><X size={12} /></button>
                                                             )}
@@ -1787,9 +1917,9 @@ export default function MasterPlan({ slug: propSlug, legacySlug, isSubmenuMode =
                                                                             <td key={colId} style={cellStyle} className="p-4 border-r border-white/[0.02]">
                                                                                 <div className="flex flex-col items-center justify-center gap-2 group/media relative">
                                                                                     {it.media_url ? (
-                                                                                        <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-white/10 group-hover:border-primary/50 transition-all shadow-lg hover:scale-110 cursor-pointer" onClick={() => setSelectedMedia({ url: it.media_url, type: it.media_type })}>
+                                                                                        <div className="relative w-14 h-14 rounded-lg overflow-hidden border border-white/10 group-hover:border-primary/50 transition-all shadow-lg hover:scale-110 cursor-pointer" onClick={() => setSelectedMedia({ url: it.media_url, type: it.media_type })}>
                                                                                             {it.media_type === 'video' ? <video src={it.media_url} className="w-full h-full object-cover" /> : <img src={it.media_url} alt="" className="w-full h-full object-cover" />}
-                                                                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/media:opacity-100 transition-opacity"><Maximize2 size={14} className="text-white" /></div>
+                                                                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/media:opacity-100 transition-opacity"><Maximize2 size={16} className="text-white" /></div>
                                                                                         </div>
                                                                                     ) : (
                                                                                         <div className="flex items-center justify-center">{isAdmin ? <div className="flex gap-1"><label className="p-2 rounded-lg bg-white/5 border border-white/10 text-gray-500 hover:text-primary hover:border-primary/50 cursor-pointer transition-all">{uploadingId === it.id ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}<input type="file" className="hidden" accept="image/*" onChange={(e) => handleItemMediaUpload(s.id, it.id, e.target.files[0])} /></label><label className="p-2 rounded-lg bg-white/5 border border-white/10 text-gray-500 hover:text-primary hover:border-primary/50 cursor-pointer transition-all">{uploadingId === it.id ? <Loader2 size={14} className="animate-spin" /> : <Video size={14} />}<input type="file" className="hidden" accept="video/*" onChange={(e) => handleItemMediaUpload(s.id, it.id, e.target.files[0])} /></label></div> : <Camera size={16} className="text-white/5" />}</div>

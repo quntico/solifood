@@ -48,7 +48,7 @@ const BottomNavBar = ({
         )}
       >
         <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
-        <span className="text-[9px] sm:text-[10px] font-medium truncate max-w-[60px]">{t(`sections.${item.id}`)}</span>
+        <span className="text-[10px] sm:text-[11px] font-medium truncate max-w-[70px]">{t(`sections.${item.id}`)}</span>
       </button>
     );
   };

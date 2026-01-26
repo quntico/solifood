@@ -479,13 +479,13 @@ const PDFSection = ({ isEditorMode, setIsEditorMode, activeTheme, sectionData })
             </Button>
           </div>
         </div>
-        <p className="text-gray-400 text-base sm:text-lg mb-6 sm:mb-8 text-center -mt-8">
+        <p className="text-gray-400 text-base sm:text-lg mb-6 sm:mb-8 text-center sm:-mt-8">
           {isEditorMode ? 'Gestiona las cotizaciones.' : 'Selecciona una cotización para visualizarla.'}
         </p>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[80vh]">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-auto lg:h-[80vh]">
           {/* List Section - 3 Columns */}
-          <div className="lg:col-span-3 flex flex-col h-full">
+          <div className="lg:col-span-3 flex flex-col h-[40vh] lg:h-full">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-white">Documentos</h2>
               {isEditorMode && (
@@ -540,7 +540,7 @@ const PDFSection = ({ isEditorMode, setIsEditorMode, activeTheme, sectionData })
           </div>
 
           {/* Viewer Section - 9 Columns */}
-          <div className="lg:col-span-9 h-full flex flex-col">
+          <div className="lg:col-span-9 h-[60vh] lg:h-full flex flex-col">
             {selectedQuotation && pdfUrl ? (
               <div className="bg-[#0a0a0a] border border-gray-800 rounded-lg overflow-hidden h-full flex flex-col">
                 <div className="p-3 border-b border-gray-800 flex justify-between items-center bg-gray-900/50 shrink-0">
@@ -550,9 +550,22 @@ const PDFSection = ({ isEditorMode, setIsEditorMode, activeTheme, sectionData })
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500 hidden sm:inline">¿No carga?</span>
-                    <a href={downloadUrl || pdfUrl} download target="_blank" rel="noopener noreferrer">
-                      <Button variant="ghost" size="icon" title="Descargar PDF"><Download className="w-5 h-5" /></Button>
-                    </a>
+                    <div className="flex items-center gap-1">
+                      {/* Mobile-only "Open in New Tab" button */}
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="sm:hidden flex items-center gap-2 bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30 h-8 text-xs font-bold"
+                        onClick={() => window.open(downloadUrl || pdfUrl, '_blank')}
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        Ver Pantalla Completa
+                      </Button>
+
+                      <a href={downloadUrl || pdfUrl} download target="_blank" rel="noopener noreferrer">
+                        <Button variant="ghost" size="icon" title="Descargar PDF" className="h-8 w-8"><Download className="w-4 h-4" /></Button>
+                      </a>
+                    </div>
                   </div>
                 </div>
                 <div className="flex-grow overflow-hidden relative bg-white">

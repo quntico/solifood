@@ -148,13 +148,13 @@ const Header = ({
                   className="absolute -bottom-1 -right-4 translate-x-full hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/80 border border-white/20 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-sm cursor-pointer select-none hover:border-primary/50 transition-colors"
                 >
                   <div className="w-2.5 h-2.5 rounded-full bg-[#39ff14] shadow-[0_0_12px_#39ff14] animate-pulse" />
-                  <span className="text-[10px] font-black text-white bg-primary/10 px-2 py-0.5 rounded border border-primary/20">VER 5.21</span>
+                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 5.35</span>
                 </div>
               </div>
             )}
           </div>
 
-          <div className="flex-[2] flex flex-col items-center justify-center text-center px-1 sm:px-4 overflow-hidden">
+          <div className="flex-[3] sm:flex-[2] flex flex-col items-center justify-center text-center px-1 sm:px-4 overflow-hidden">
             <h1 className={`font-bold text-gray-200 leading-tight truncate w-full transition-all duration-500 ${isScrolled ? 'text-sm sm:text-xl md:text-2xl' : 'text-base sm:text-2xl md:text-3xl'}`}>
               {project}
             </h1>
@@ -175,7 +175,7 @@ const Header = ({
                     <span className="hidden sm:inline font-bold text-xs">PDF</span>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64 bg-zinc-950 border-white/10">
+                <DropdownMenuContent align="end" className="w-[calc(100vw-2rem)] sm:w-64 bg-zinc-950 border-white/10">
                   <DropdownMenuItem
                     onClick={() => window.dispatchEvent(new CustomEvent('SOLIFOOD_EXPORT_PROPUESTA'))}
                     className="flex gap-3 p-3 focus:bg-primary/20 cursor-pointer"
