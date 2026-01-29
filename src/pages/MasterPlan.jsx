@@ -43,6 +43,7 @@ const uid = () => Math.random().toString(16).slice(2) + Date.now().toString(16);
 const initialSections = [
     {
         id: "sec_cacao",
+        collapsed: true,
         titulo: "Línea de cacao (desde grano) · Selección → Tostado → Descascarillado → Molienda → Prensado",
         tag: "Oferta LST · Bean to Powder 200–300 kg/h",
         items: [
@@ -117,7 +118,7 @@ const initialSections = [
     },
     {
         id: "sec_hex",
-        collapsed: false,
+        collapsed: true,
         summaryDesc: "",
         titulo: "Empaque de tabletas hexagonales · Encartonado hex",
         tag: "Pendiente de cotizar (tu otra presentación)",
@@ -129,7 +130,7 @@ const initialSections = [
     },
     {
         id: "sec_utilidades",
-        collapsed: false,
+        collapsed: true,
         summaryDesc: "",
         titulo: "Utilidades mínimas (planta)",
         tag: "Pendiente (no inflar: queda en 0 hasta cotizar)",
@@ -151,7 +152,7 @@ const cleanTitle = (text) => {
     return clean.trim().toUpperCase();
 };
 
-export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isSubmenuMode = false, isAdmin: propIsAdmin, isAdminAuthenticated: propIsAdminAuth }) {
+export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isSubmenuMode = false, isAdmin: propIsAdmin, isAdminAuthenticated: propIsAdminAuth, quotationData }) {
     const { slug: paramsSlug } = useParams();
     // UNIVERSAL SLUG RESOLVER: Ensure Master Plan records are ALWAYS prefixed with mp-
     // regardless of whether they come from props (QuotationViewer) or params (standalone route)
@@ -182,11 +183,11 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
     const [isParamsModalOpen, setIsParamsModalOpen] = useState(false);
     const [isTemplateEditorOpen, setIsTemplateEditorOpen] = useState(false);
 
-    const [clientName, setClientName] = useState(() => localStorage.getItem("solifood_mp_client") || "YADIRA RAMIREZ");
-    const [projectName, setProjectName] = useState(() => localStorage.getItem("solifood_mp_project") || "CDA 2000");
+    const [clientName, setClientName] = useState(() => quotationData?.client || localStorage.getItem("solifood_mp_client") || "YADIRA RAMIREZ");
+    const [projectName, setProjectName] = useState(() => quotationData?.project || localStorage.getItem("solifood_mp_project") || "CDA 2000");
     const [projectDesc, setProjectDesc] = useState(() => localStorage.getItem("solifood_mp_desc") || "Proyecto desde grano + 2 líneas de tabletas + polvo bebida + empaque.");
     const [projectDate, setProjectDate] = useState(() => localStorage.getItem("solifood_mp_date") || new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' }));
-    const [logoUrl, setLogoUrl] = useState(() => localStorage.getItem("solifood_mp_logo") || "/solifood-logo-v418.png");
+    const [logoUrl, setLogoUrl] = useState(() => quotationData?.logo || localStorage.getItem("solifood_mp_logo") || "/solifood-logo-v418.png");
 
     const [mpTitle, setMpTitle] = useState(() => localStorage.getItem("solifood_mp_title") || "MASTER PLAN");
     const [mpSubTitle, setMpSubTitle] = useState(() => localStorage.getItem("solifood_mp_subtitle") || "INDUSTRIAL CENTER");
@@ -201,6 +202,7 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
     const [isHydrated, setIsHydrated] = useState(false);
     const [importedFileName, setImportedFileName] = useState(() => localStorage.getItem("solifood_mp_imported_filename") || "");
     const [globalUtilVal, setGlobalUtilVal] = useState(10);
+    const [isPriceEditMode, setIsPriceEditMode] = useState(false);
     const [targetAmountModalOpen, setTargetAmountModalOpen] = useState(false);
     const [targetAmountValue, setTargetAmountValue] = useState(0);
     const [pdfSettings, setPdfSettings] = useState(() => {
@@ -374,8 +376,9 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                     if (sectionsToSet && sectionsToSet.length > 0) {
                         const cleanedSections = sectionsToSet.map(s => ({ ...s, titulo: cleanTitle(s.titulo) }));
                         if (!isAdmin) {
-                            setSections(cleanedSections);
-                            console.log("[MasterPlan] Structure loaded from cloud.");
+                            // [FIX] Force all sections to be collapsed for the client
+                            setSections(cleanedSections.map(s => ({ ...s, collapsed: true })));
+                            console.log("[MasterPlan] Structure loaded from cloud (forced collapsed for client).");
                         } else {
                             console.log("[MasterPlan] Admin mode: skipping cloud overwrite of local modules.");
                         }
@@ -537,6 +540,17 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
         saveToCloud(updatedConfig).catch(e => console.error("Cloud sync error:", e));
     };
 
+    useEffect(() => {
+        const handleEsc = (e) => {
+            if (e.key === 'Escape') {
+                setSelectedMedia(null);
+                setIsHeroVideoActive(false);
+            }
+        };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, []);
+
     const toggleSection = (id) => {
         setSections(prev => prev.map(s => s.id === id ? { ...s, collapsed: !s.collapsed } : s));
     };
@@ -591,6 +605,7 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
             // Si estamos desactivando el editor, guardamos todo preventivamente
             if (!newAdminState) {
                 console.log("[MasterPlan] Desactivando editor, guardando cambios...");
+                setIsPriceEditMode(false);
                 saveToCloud();
             }
         }
@@ -804,6 +819,30 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
 
     const updateItem = (sectionId, itemId, patch) => {
         setSections(prev => prev.map(s => s.id === sectionId ? { ...s, items: s.items.map(it => it.id === itemId ? { ...it, ...patch } : it) } : s));
+    };
+
+    const updateItemByTotalVenta = (sectionId, itemId, newTotal) => {
+        setSections(prev => prev.map(s => s.id === sectionId ? {
+            ...s,
+            items: s.items.map(it => {
+                if (it.id === itemId) {
+                    const cost = n(it.costoUSD);
+                    const q = n(it.qty);
+                    if (q > 0) {
+                        if (cost > 0) {
+                            const vUnit = newTotal / q;
+                            const newUtil = ((vUnit / cost) - 1) * 100;
+                            return { ...it, utilidad: Number(newUtil.toFixed(4)) };
+                        } else {
+                            // Si el costo es 0, asignamos el valor total al costo y util 0 para que rinda el precio
+                            const vUnit = newTotal / q;
+                            return { ...it, costoUSD: Number(vUnit.toFixed(2)), utilidad: 0 };
+                        }
+                    }
+                }
+                return it;
+            })
+        } : s));
     };
 
     const addItem = (sectionId) => {
@@ -1544,6 +1583,13 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                                     {colsLocked ? <Lock size={12} /> : <Unlock size={12} />}
                                     {colsLocked ? "Celdas" : "Libre"}
                                 </button>
+                                <button
+                                    onClick={() => setIsPriceEditMode(!isPriceEditMode)}
+                                    className={`px-4 py-2 rounded-xl border text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2 ${isPriceEditMode ? 'border-green-500 bg-green-500/10 text-green-500 shadow-[0_0_15px_rgba(34,197,94,0.2)]' : 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20'}`}
+                                >
+                                    <FileSpreadsheet size={12} />
+                                    {isPriceEditMode ? "Fijar Precios" : "Precio Libre"}
+                                </button>
 
                                 <button
                                     onClick={() => {
@@ -1947,7 +1993,18 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                                                                             <td key={colId} style={cellStyle} className={`p-4 text-right text-xs font-mono border-r border-white/[0.02] ${!it.activo ? 'line-through text-gray-600' : 'text-gray-400'}`}>{money(r.ventaUnitFinal)}</td>
                                                                         );
                                                                         if (colId === 'total') return (
-                                                                            <td key={colId} style={cellStyle} className={`p-4 text-right text-sm font-black tracking-tight border-r border-white/[0.02] ${!it.activo ? 'line-through text-primary/30' : 'text-primary'}`}>{money(r.totalVenta)}</td>
+                                                                            <td key={colId} style={cellStyle} className={`p-4 text-right text-sm font-black tracking-tight border-r border-white/[0.02] ${!it.activo ? 'line-through text-primary/30' : 'text-primary'}`}>
+                                                                                {isAdmin && isPriceEditMode ? (
+                                                                                    <input
+                                                                                        type="number"
+                                                                                        defaultValue={r.totalVenta.toFixed(2)}
+                                                                                        onBlur={(e) => updateItemByTotalVenta(s.id, it.id, n(e.target.value))}
+                                                                                        className="bg-primary/10 border border-primary/30 rounded px-2 py-1 text-xs font-mono text-primary w-full text-right focus:border-primary/50 outline-none"
+                                                                                    />
+                                                                                ) : (
+                                                                                    money(r.totalVenta)
+                                                                                )}
+                                                                            </td>
                                                                         );
                                                                         if (colId === 'action' && isAdmin) return (
                                                                             <td key={colId} style={cellStyle} className="p-4 text-center border-l border-white/[0.02]"><button onClick={() => removeItem(s.id, it.id)} className="text-red-500 opacity-20 hover:opacity-100 transition-opacity"><X size={14} /></button></td>

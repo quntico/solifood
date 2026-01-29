@@ -330,12 +330,23 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
     try {
       const currentConfig = currentThemeData.sections_config;
       const wrappedPayload = Array.isArray(currentConfig)
-        ? { sections: currentConfig, heroVideoUrl: currentThemeData.video_url }
+        ? {
+          sections: currentConfig,
+          heroVideoUrl: currentThemeData.video_url,
+          // Redundant Header Info Fallback
+          title: currentThemeData.title,
+          subtitle: currentThemeData.subtitle,
+          company: currentThemeData.company
+        }
         : {
           ...(currentConfig || {}),
           sections: currentConfig?.sections || [],
           heroVideoUrl: currentThemeData.video_url,
-          heroVideoUpdatedAt: new Date().toISOString()
+          heroVideoUpdatedAt: new Date().toISOString(),
+          // Redundant Header Info Fallback
+          title: currentThemeData.title,
+          subtitle: currentThemeData.subtitle,
+          company: currentThemeData.company
         };
 
       const dataToSave = {
@@ -368,13 +379,17 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
         let lastError = null;
 
         // Dynamic recovery strategy for missing columns (42703 error)
-        for (let i = 0; i < 5; i++) { // Max 5 retries for different missing columns
-          const { error } = await supabase.from('quotations').update(attemptData).eq('theme_key', activeTheme);
+        for (let i = 0; i < 5; i++) {
+          console.log(`[AdminModal] Attempting Supabase update for ${activeTheme}, attempt ${i + 1}`, attemptData);
+          const { error, status } = await supabase.from('quotations').update(attemptData).eq('theme_key', activeTheme);
 
           if (!error) {
+            console.log(`[AdminModal] Supabase update success! Status: ${status}`);
             saveSuccess = true;
             break;
           }
+
+          console.error(`[AdminModal] Supabase error (attempt ${i + 1}):`, error);
 
           if (error.code === '42703') {
             console.warn("[AdminModal] Column missing in DB, removing from payload and retrying...", error.message);
@@ -401,13 +416,27 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
 
         if (!saveSuccess) throw lastError || new Error("Error desconocido al guardar.");
 
-        setThemes(prev => ({
-          ...prev,
-          [activeTheme]: { ...prev[activeTheme], ...currentThemeData }
-        }));
+        // Update local state in the viewer via parent setter
+        // CRITICAL: We MUST use the latest currentThemeData and merge with the latest themes state
+        setThemes(prev => {
+          const updatedRecord = { ...(prev[activeTheme] || {}), ...currentThemeData };
+          console.log(`[AdminModal] Updating local state for ${activeTheme}:`, updatedRecord);
+          return {
+            ...prev,
+            [activeTheme]: updatedRecord
+          };
+        });
 
-        if (!silent) toast({ title: "Guardado", description: "Cambios guardados correctamente." });
-        if (closeModal) onClose();
+        if (!silent) {
+          toast({ title: "Guardado ✅", description: "Cambios guardados correctamente." });
+        }
+
+        if (closeModal) {
+          // Sync with preview - clear it so it picks up the real theme data we just updated in setThemes
+          if (onPreviewUpdate) onPreviewUpdate(null);
+          // Small delay before close to allow parent to process state update (sometimes helps with race conditions)
+          setTimeout(onClose, 50);
+        }
       } catch (error) {
         console.error('Error saving:', error);
         if (!silent) toast({ title: "Error al guardar", description: error.message, variant: "destructive" });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import {
@@ -420,16 +420,18 @@ const PropuestaEconomicaSection = ({
   );
 
   // 2. Sync state when props change (External Updates Only)
+  const lastIncomingContent = useRef(JSON.stringify(resolveContent(sectionData.content)));
+
   useEffect(() => {
     if (sectionData.content) {
       const incoming = resolveContent(sectionData.content);
       const incomingStr = JSON.stringify(incoming);
-      const currentStr = JSON.stringify(content);
 
-      // [FIX] Avoid overwriting if they are identical (prevents loss of focus or race resets)
-      if (incomingStr !== currentStr) {
-        console.log("[PropuestaEconomica] Syncing external content update...");
+      // [FIX] Only sync if the prop actually changed EXTERNALLY (don't revert local changes on every parent re-render)
+      if (incomingStr !== lastIncomingContent.current) {
+        console.log("[PropuestaEconomica] External content change detected. Syncing...");
         setContent(JSON.parse(incomingStr));
+        lastIncomingContent.current = incomingStr;
       }
     }
   }, [sectionData.content]);
@@ -456,9 +458,12 @@ const PropuestaEconomicaSection = ({
     // Optimistic update
     setContent(newContent);
 
-    // Propagate to parent ONLY if in editor mode (prevents DB writes for public users)
-    // Use isModeAdmin to allow saving even if only local admin mode is active
-    if (onContentChange && isModeAdmin) {
+    // [FIX] Update the ref to match our local change, so the next re-render from parent
+    // (which will acknowledge this change) isn't seen as a "new external change".
+    lastIncomingContent.current = JSON.stringify(newContent);
+
+    // Propagate to parent to update totals locally (even for public users)
+    if (onContentChange) {
       onContentChange(newContent);
     }
   };

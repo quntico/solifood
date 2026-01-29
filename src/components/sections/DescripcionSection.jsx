@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion } from 'framer-motion';
-import { UploadCloud, Save, X, Loader2, AlignLeft, AlignJustify } from 'lucide-react';
+import { UploadCloud, Save, X, Loader2, AlignLeft, AlignJustify, AlignCenter } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/customSupabaseClient';
 import { getActiveBucket } from '@/lib/bucketResolver';
@@ -52,8 +52,8 @@ const EditableText = ({
     setIsEditing(false);
   };
 
-  const toggleAlign = () => {
-    setCurrentAlign(prev => prev === 'left' ? 'justify' : 'left');
+  const toggleAlign = (newAlign) => {
+    setCurrentAlign(newAlign);
   };
 
   const handleCancel = () => {
@@ -64,8 +64,9 @@ const EditableText = ({
   };
 
   if (!isEditorMode) {
+    const alignClass = alignment === 'justify' ? 'text-justify' : alignment === 'center' ? 'text-center' : 'text-left';
     return <p
-      className={alignment === 'justify' ? 'text-justify' : 'text-left'}
+      className={alignClass}
       dangerouslySetInnerHTML={{
         __html: formatTextForDisplay(applyFormatting(value))
       }}
@@ -81,12 +82,19 @@ const EditableText = ({
         className={`w-full bg-gray-800 border border-primary rounded-md p-2 text-white resize-none focus:outline-none ${currentAlign === 'justify' ? 'text-justify' : 'text-left'}`}
         rows={4}
       />
-      <div className="absolute top-2 right-2 flex gap-2">
-        <button onClick={toggleAlign} className="p-1 bg-blue-500 text-white rounded-full hover:bg-blue-600" title="Alinear texto">
-          {currentAlign === 'justify' ? <AlignJustify size={16} /> : <AlignLeft size={16} />}
+      <div className="absolute top-2 right-2 flex gap-1 bg-black/50 backdrop-blur-sm p-1 rounded-full border border-white/10">
+        <button onClick={() => toggleAlign('left')} className={`p-1 rounded-full transition-colors ${currentAlign === 'left' ? 'bg-primary text-black' : 'hover:bg-white/10 text-white'}`} title="Izquierda">
+          <AlignLeft size={14} />
         </button>
-        <button onClick={handleSave} className="p-1 bg-primary text-black rounded-full hover:bg-primary/80"><Save size={16} /></button>
-        <button onClick={handleCancel} className="p-1 bg-red-500 text-white rounded-full hover:bg-red-600"><X size={16} /></button>
+        <button onClick={() => toggleAlign('center')} className={`p-1 rounded-full transition-colors ${currentAlign === 'center' ? 'bg-primary text-black' : 'hover:bg-white/10 text-white'}`} title="Centro">
+          <AlignCenter size={14} />
+        </button>
+        <button onClick={() => toggleAlign('justify')} className={`p-1 rounded-full transition-colors ${currentAlign === 'justify' ? 'bg-primary text-black' : 'hover:bg-white/10 text-white'}`} title="Justificado">
+          <AlignJustify size={14} />
+        </button>
+        <div className="w-[1px] h-4 bg-white/20 mx-1 self-center" />
+        <button onClick={handleSave} className="p-1 bg-green-500 text-white rounded-full hover:bg-green-600 shadow-lg" title="Guardar"><Save size={14} /></button>
+        <button onClick={handleCancel} className="p-1 bg-red-500 text-white rounded-full hover:bg-red-600 shadow-lg" title="Cancelar"><X size={14} /></button>
       </div>
     </div> : <p
       onClick={() => setIsEditing(true)}
@@ -105,6 +113,7 @@ const DescripcionSection = ({
   activeTheme,
   onContentChange
 }) => {
+  const { t } = useLanguage();
   const {
     toast
   } = useToast();
@@ -114,6 +123,8 @@ const DescripcionSection = ({
   const defaultContent = {
     p1: `La línea ${quotationData.project} es una solución de producción continua que integra cuatro áreas fundamentales: mezclado, formado, enfriamiento y empaquetado. Cada área ha sido diseñada para trabajar en sincronía perfecta, garantizando una producción fluida y eficiente de barras de cereal de alta calidad.`,
     p1_align: 'left',
+    title: `${t('sections.visionGeneral')} <span class="text-primary">${quotationData.project}</span>`,
+    title_align: 'left',
     image: "https://imagedelivery.net/LqiWLm-3MGbYHtFuUbcBtA/ed2d6f1f-4d92-4f33-722a-2a4b8682e000/public"
   };
   const content = sectionData.content || defaultContent;
@@ -190,7 +201,7 @@ const DescripcionSection = ({
       }
     }
   };
-  const { t } = useLanguage();
+
 
   const title = `${t('sections.visionGeneral')} <span class="text-primary">${quotationData.project}</span>`;
 

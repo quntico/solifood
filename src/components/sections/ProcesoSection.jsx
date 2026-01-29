@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { motion, useScroll, useSpring, AnimatePresence } from 'framer-motion';
-import { Layers, Edit, Settings, FileText, Image as ImageIcon } from 'lucide-react';
+import { Layers, Edit, Settings, FileText, Image as ImageIcon, X } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import SectionHeader from '@/components/SectionHeader';
 import { iconMap } from '@/lib/iconMap';
@@ -75,6 +75,17 @@ const ProcesoSection = ({ sectionData, isEditorMode, onContentChange }) => {
     restDelta: 0.001
   });
 
+  const [selectedImage, setSelectedImage] = useState(null);
+
+  // ESC key support for closing lightbox
+  React.useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') setSelectedImage(null);
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, []);
+
   const handleModalSave = (newSteps) => {
     onContentChange({ steps: newSteps });
     toast({ title: 'Flujo actualizado', description: 'Los cambios se han guardado correctamente.' });
@@ -132,7 +143,12 @@ const ProcesoSection = ({ sectionData, isEditorMode, onContentChange }) => {
                       {isEven ? (
                         <TimelineCardContent step={step} index={index} onStepsChange={(newSteps) => onContentChange({ steps: newSteps })} steps={steps} isEditorMode={isEditorMode} />
                       ) : (
-                        <StepImage step={step} isEditorMode={isEditorMode} onOpenModal={() => setIsModalOpen(true)} />
+                        <StepImage
+                          step={step}
+                          isEditorMode={isEditorMode}
+                          onOpenModal={() => setIsModalOpen(true)}
+                          onImageClick={(imgData) => setSelectedImage(imgData)}
+                        />
                       )}
                     </motion.div>
                   </div>
@@ -193,7 +209,12 @@ const ProcesoSection = ({ sectionData, isEditorMode, onContentChange }) => {
                               <TimelineCardContent step={step} index={index} onStepsChange={(newSteps) => onContentChange({ steps: newSteps })} steps={steps} isEditorMode={isEditorMode} />
                             </div>
                           ) : (
-                            <StepImage step={step} isEditorMode={isEditorMode} onOpenModal={() => setIsModalOpen(true)} />
+                            <StepImage
+                              step={step}
+                              isEditorMode={isEditorMode}
+                              onOpenModal={() => setIsModalOpen(true)}
+                              onImageClick={(imgData) => setSelectedImage(imgData)}
+                            />
                           )}
                         </div>
 
@@ -210,7 +231,12 @@ const ProcesoSection = ({ sectionData, isEditorMode, onContentChange }) => {
                             {!isEven ? (
                               <TimelineCardContent step={step} index={index} onStepsChange={(newSteps) => onContentChange({ steps: newSteps })} steps={steps} isEditorMode={isEditorMode} />
                             ) : (
-                              <StepImage step={step} isEditorMode={isEditorMode} onOpenModal={() => setIsModalOpen(true)} />
+                              <StepImage
+                                step={step}
+                                isEditorMode={isEditorMode}
+                                onOpenModal={() => setIsModalOpen(true)}
+                                onImageClick={(imgData) => setSelectedImage(imgData)}
+                              />
                             )}
                           </motion.div>
                         </div>
@@ -230,6 +256,50 @@ const ProcesoSection = ({ sectionData, isEditorMode, onContentChange }) => {
         initialSteps={steps}
         onSave={handleModalSave}
       />
+
+      {/* Lightbox Overlay */}
+      <AnimatePresence>
+        {selectedImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[500] flex items-center justify-center p-4 sm:p-8 bg-black/90 backdrop-blur-xl cursor-zoom-out"
+            onClick={() => setSelectedImage(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative max-w-7xl max-h-full flex flex-col items-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setSelectedImage(null)}
+                className="absolute -top-4 -right-4 sm:-top-10 sm:-right-10 p-2 bg-primary text-white rounded-full hover:bg-primary/80 transition-colors shadow-lg z-50 focus:outline-none"
+                aria-label="Cerrar"
+              >
+                <X className="w-6 h-6 sm:w-8 sm:h-8" />
+              </button>
+
+              <div className="relative group rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-zinc-950">
+                <img
+                  src={selectedImage.url}
+                  alt={selectedImage.title}
+                  className="max-w-full max-h-[80vh] object-contain select-none"
+                />
+
+                {/* Caption bar */}
+                <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 bg-gradient-to-t from-black/90 to-transparent border-t border-white/5">
+                  <h4 className="text-white text-lg sm:text-2xl font-black uppercase tracking-tight">
+                    {selectedImage.title}
+                  </h4>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -290,9 +360,12 @@ const TimelineCardContent = ({ step, index, onStepsChange, steps, isEditorMode }
   );
 };
 
-const StepImage = ({ step, isEditorMode, onOpenModal }) => {
+const StepImage = ({ step, isEditorMode, onOpenModal, onImageClick }) => {
   return (
-    <div className="w-full h-64 rounded-xl overflow-hidden relative group flex items-center justify-center">
+    <div
+      className={`w-full h-64 rounded-xl overflow-hidden relative group flex items-center justify-center ${step.image_url ? 'cursor-zoom-in' : ''}`}
+      onClick={() => step.image_url && onImageClick({ url: step.image_url, title: step.title })}
+    >
       {step.image_url ? (
         <>
           <img
@@ -303,7 +376,7 @@ const StepImage = ({ step, isEditorMode, onOpenModal }) => {
           {/* LED Indicator */}
           <div className="absolute bottom-6 right-8 w-10 h-1 bg-green-500/20 rounded-full group-hover:bg-green-400 group-hover:shadow-[0_0_10px_#4ade80] transition-all duration-700" />
           {isEditorMode && (
-            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-default" onClick={(e) => e.stopPropagation()}>
               <Button size="sm" variant="outline" onClick={onOpenModal}>Cambiar</Button>
             </div>
           )}

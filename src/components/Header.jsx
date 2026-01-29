@@ -56,28 +56,61 @@ const Header = ({
     // 2. Otherwise, fetch Master Plan data for THIS project from Supabase
     setIsExportingMP(true);
     try {
-      const { data, error } = await supabase
+      const currentSlug = quotationData.slug || quotationData.theme_key;
+      const mpSlug = `mp-${currentSlug}`;
+
+      let { data, error } = await supabase
         .from('quotations')
         .select('sections_config')
-        .eq('slug', 'master-plan') // We assume a global master-plan slug or link it to current project if needed
+        .eq('slug', mpSlug)
         .single();
 
-      if (error || !data) throw new Error("No se encontró configuración del Master Plan.");
+      // SECOND TRY: Without mp- prefix (Some projects might be saved directly)
+      if (error || !data) {
+        console.warn(`Specific MP ${mpSlug} not found. Trying without prefix: ${currentSlug}`);
+        const { data: noPrefixData } = await supabase
+          .from('quotations')
+          .select('sections_config')
+          .eq('slug', currentSlug)
+          .single();
+        data = noPrefixData;
+      }
 
-      const config = data.sections_config;
+      // FALLBACK: If still not found, try the generic one as template
+      if (!data) {
+        console.warn(`Master Plan for ${mpSlug} not found. Checking embedded config...`);
+        // Use sections_config from quotationData if it contains a master_plan component
+        const embeddedMP = quotationData.sections_config?.find(s => s.component === 'master_plan' || s.id === 'master_plan')?.content;
+
+        if (embeddedMP) {
+          data = { sections_config: embeddedMP };
+        } else {
+          console.warn(`No embedded MP found. Using global fallback...`);
+          const { data: fallbackData } = await supabase
+            .from('quotations')
+            .select('sections_config')
+            .eq('slug', 'master-plan-concentrado')
+            .single();
+          data = fallbackData;
+        }
+      }
+
+      if (!data) throw new Error("No se encontró ninguna configuración de Master Plan.");
+
+      const config = data.sections_config || {};
 
       await generateMasterPlanPDF({
-        sections: config.sections || [],
+        sections: config.sections || config || [],
         pdfSettings: config.pdfSettings,
-        clientName: config.clientName || client,
-        projectName: config.projectName || project,
-        logoUrl: logo
+        clientName: client || config.clientName || "CLIENTE",
+        projectName: project || config.projectName || "PROYECTO",
+        logoUrl: logo || config.logoUrl
       });
 
-      toast({ title: "Master Plan Exportado", description: "El concentrado de proyectos se guardó correctamente." });
+      toast({ title: "Master Plan Exportado", description: `Concentrado generado para: ${project}` });
     } catch (err) {
       console.error("Master Plan Global Export Error:", err);
-      toast({ title: "Error", description: "No se pudo generar el Master Plan.", variant: "destructive" });
+      toast({ title: "Error", description: "No se pudo generar el Master Plan. Verifica que exista una configuración válida.", variant: "destructive" });
     } finally {
       setIsExportingMP(false);
     }
@@ -148,7 +181,7 @@ const Header = ({
                   className="absolute -bottom-1 -right-4 translate-x-full hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/80 border border-white/20 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-sm cursor-pointer select-none hover:border-primary/50 transition-colors"
                 >
                   <div className="w-2.5 h-2.5 rounded-full bg-[#39ff14] shadow-[0_0_12px_#39ff14] animate-pulse" />
-                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 5.35</span>
+                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 5.50</span>
                 </div>
               </div>
             )}

@@ -215,37 +215,58 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
   }, [displayData?.hero_video_is_integrated, displayData?.hero_video_scale, displayData?.hero_video_border_radius]);
 
   useEffect(() => {
+    if (!initialQuotationData) return;
+
     const processedData = {
       ...initialQuotationData,
       sections_config: mergeWithDefaults(initialQuotationData.sections_config, initialQuotationData.theme_key),
     };
+
+    // REDUNDANCY HYDRATION: If sections_config contains header data, prioritize it if it's an object
+    if (processedData.sections_config && !Array.isArray(processedData.sections_config)) {
+      if (processedData.sections_config.title) processedData.title = processedData.sections_config.title;
+      if (processedData.sections_config.subtitle) processedData.subtitle = processedData.sections_config.subtitle;
+      if (processedData.sections_config.company) processedData.company = processedData.sections_config.company;
+    }
+
     const initialThemes = isAdminView ? allThemes : { [initialQuotationData.theme_key]: processedData };
 
-    // FIXED: Only set themes if we don't have them yet or if we aren't in admin mode
-    // In admin mode, we want to keep our local 'themes' state which might have new clones
+    console.log(`[QuotationViewer] Effect Init/Sync: activeTheme=${activeTheme}, hasAllThemes=${Object.keys(allThemes).length > 0}`);
+
     setThemes(prev => {
-      if (isAdminView && Object.keys(prev).length > 0) return prev;
+      // If we already have a full project data in our local state, don't overwrite it with a "reset"
+      // to the initial prop data, unless the project actually changed (handled by key or logic).
+      if (Object.keys(prev).length > 0) {
+        const currentData = prev[initialQuotationData.theme_key];
+
+        // If we already have the current project and it has full config, keep it (respect local changes)
+        if (currentData && currentData.sections_config) {
+          // But still incorporate any NEW themes from initialThemes if we are in admin view
+          if (isAdminView) {
+            return { ...initialThemes, ...prev };
+          }
+          return prev;
+        }
+      }
+
       return initialThemes;
     });
 
     if (isAdminView) {
       const savedTheme = localStorage.getItem('activeTheme');
-      // FALLBACK SEGURO: Si el tema guardado no existe o no tiene datos, forzar el inicial
-      if (savedTheme && initialThemes[savedTheme] && initialThemes[savedTheme].sections_config) {
+      if (savedTheme && (allThemes[savedTheme] || (initialThemes && initialThemes[savedTheme]))) {
         setActiveTheme(savedTheme);
       } else {
-        console.warn("[QuotationViewer] Fallback to initial theme due to missing saved data");
         setActiveTheme(initialQuotationData.theme_key);
       }
     } else {
       setActiveTheme(initialQuotationData.theme_key);
     }
 
-    // [SAFETY] If we already have localized data, we are hydrated
     if (processedData.sections_config) {
       setIsHydrated(true);
     }
-  }, [initialQuotationData.theme_key, isAdminView]);
+  }, [initialQuotationData?.theme_key, isAdminView, allThemes]); // Añadido allThemes a deps
 
   // EFFECT: Auto-fetch full data if the ACTIVE theme is a stub
   useEffect(() => {
@@ -265,6 +286,13 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
               ...data,
               sections_config: mergeWithDefaults(data.sections_config, activeTheme)
             };
+
+            // REDUNDANCY HYDRATION
+            if (processedData.sections_config && !Array.isArray(processedData.sections_config)) {
+              if (processedData.sections_config.title) processedData.title = processedData.sections_config.title;
+              if (processedData.sections_config.subtitle) processedData.subtitle = processedData.sections_config.subtitle;
+              if (processedData.sections_config.company) processedData.company = processedData.sections_config.company;
+            }
             setThemes(prev => ({
               ...prev,
               [activeTheme]: processedData
@@ -298,7 +326,19 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
           .single()
           .then(({ data, error }) => {
             if (data && !error) {
-              setThemes(prev => ({ ...prev, [savedTheme]: data }));
+              const processedData = {
+                ...data,
+                sections_config: mergeWithDefaults(data.sections_config, savedTheme)
+              };
+
+              // REDUNDANCY HYDRATION
+              if (processedData.sections_config && !Array.isArray(processedData.sections_config)) {
+                if (processedData.sections_config.title) processedData.title = processedData.sections_config.title;
+                if (processedData.sections_config.subtitle) processedData.subtitle = processedData.sections_config.subtitle;
+                if (processedData.sections_config.company) processedData.company = processedData.sections_config.company;
+              }
+
+              setThemes(prev => ({ ...prev, [savedTheme]: processedData }));
               setActiveTheme(savedTheme);
             } else {
               // Fallback if fetch fails
@@ -540,19 +580,22 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
         return;
       }
 
-      const { error } = await supabase
-        .from('quotations')
-        .update({ sections_config: wrappedPayload })
-        .eq('theme_key', activeTheme);
+      // 2. Persist to Supabase ONLY if in Admin View AND Authenticated (prevents error toasts for public users)
+      if (isAdminView && isAdminAuthenticated) {
+        const { error } = await supabase
+          .from('quotations')
+          .update({ sections_config: wrappedPayload })
+          .eq('theme_key', activeTheme);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      if (isEditorMode) {
-        toast({
-          title: "Sincronizado",
-          description: "La configuración se ha guardado correctamente.",
-          duration: 2000
-        });
+        if (isEditorMode) {
+          toast({
+            title: "Sincronizado",
+            description: "La configuración se ha guardado correctamente.",
+            duration: 2000
+          });
+        }
       }
     } catch (err) {
       console.error("Error saving sections config:", err);
