@@ -83,20 +83,27 @@ const Header = ({
         }
       }
 
-      // STEP C: AUTO-GENERATOR FROM FICHAS (New Intelligence Ver 5.52)
+      // STEP C: AUTO-GENERATOR FROM FICHAS (New Intelligence Ver 5.53)
       if (!config) {
         console.log("[Header] Attempting auto-generation from Technical Sheets...");
-        const fichas = quotationData.sections_config?.filter(s => s.component === 'ficha' || s.id === 'ficha');
+
+        // UNIVERSAL EXTRACTOR: Use sections array if wrapped in object or the array itself
+        const sectionsData = quotationData.sections_config?.sections || (Array.isArray(quotationData.sections_config) ? quotationData.sections_config : []);
+        const fichas = sectionsData.filter(s => s.component === 'ficha' || s.id === 'ficha' || s.id?.includes('ficha'));
 
         if (fichas && fichas.length > 0) {
           const generatedSections = [];
+
           fichas.forEach(f => {
-            const fichaContent = Array.isArray(f.content) ? f.content : [f.content];
-            fichaContent.forEach(tab => {
-              if (tab && tab.tabTitle) {
+            // Content can be an array of tabs or a single object
+            const fContent = f.content;
+            const tabs = Array.isArray(fContent) ? fContent : (fContent ? [fContent] : []);
+
+            tabs.forEach(tab => {
+              if (tab && (tab.tabTitle || tab.technical_data)) {
                 generatedSections.push({
                   id: `gen_${Date.now()}_${Math.random()}`,
-                  name: tab.tabTitle,
+                  name: tab.tabTitle || "Equipo",
                   description: (tab.technical_data || []).map(d => `${d.label}: ${d.value} ${d.unit || ''}`).join(' | '),
                   image: tab.image || '',
                   qty: 1
@@ -106,7 +113,7 @@ const Header = ({
           });
 
           if (generatedSections.length > 0) {
-            console.log(`[Header] Auto-generated MP with ${generatedSections.length} items.`);
+            console.log(`[Header] Auto-generated MP with ${generatedSections.length} items from ${fichas.length} sheets.`);
             config = { sections: generatedSections };
           }
         }
@@ -232,7 +239,7 @@ const Header = ({
                   className="absolute -bottom-1 -right-4 translate-x-full hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/80 border border-white/20 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-sm cursor-pointer select-none hover:border-primary/50 transition-colors"
                 >
                   <div className="w-2.5 h-2.5 rounded-full bg-[#39ff14] shadow-[0_0_12px_#39ff14] animate-pulse" />
-                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 5.52</span>
+                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 5.53</span>
                 </div>
               </div>
             )}
