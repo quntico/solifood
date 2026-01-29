@@ -259,6 +259,15 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
         if (propIsAdminAuth !== undefined) setIsAdminAuthenticated(propIsAdminAuth);
     }, [propIsAdminAuth]);
 
+    // SYNC IDENTITY WITH PROPS (Ver 5.55)
+    useEffect(() => {
+        if (quotationData) {
+            if (quotationData.client) setClientName(quotationData.client);
+            if (quotationData.project) setProjectName(quotationData.project);
+            if (quotationData.logo) setLogoUrl(quotationData.logo);
+        }
+    }, [quotationData]);
+
     useEffect(() => {
         if (!isHydrated) return; // Prevent saving until we have fetched or decided we are the source of truth
 

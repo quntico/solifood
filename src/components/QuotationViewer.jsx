@@ -848,6 +848,7 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
             legacySlug="master-plan-concentrado"
             isAdmin={isEditorMode && isAdminView}
             isAdminAuthenticated={isAdminAuthenticated && isAdminView}
+            quotationData={displayData}
           />
         </div>
       );
