@@ -83,38 +83,48 @@ const Header = ({
         }
       }
 
-      // STEP C: AUTO-GENERATOR FROM FICHAS (New Intelligence Ver 5.53)
+      // STEP C: AUTO-GENERATOR FROM FICHAS (New Intelligence Ver 5.56)
       if (!config) {
         console.log("[Header] Attempting auto-generation from Technical Sheets...");
 
-        // UNIVERSAL EXTRACTOR: Use sections array if wrapped in object or the array itself
         const sectionsData = quotationData.sections_config?.sections || (Array.isArray(quotationData.sections_config) ? quotationData.sections_config : []);
         const fichas = sectionsData.filter(s => s.component === 'ficha' || s.id === 'ficha' || s.id?.includes('ficha'));
 
         if (fichas && fichas.length > 0) {
-          const generatedSections = [];
+          const generatedItems = [];
 
           fichas.forEach(f => {
-            // Content can be an array of tabs or a single object
             const fContent = f.content;
             const tabs = Array.isArray(fContent) ? fContent : (fContent ? [fContent] : []);
 
             tabs.forEach(tab => {
               if (tab && (tab.tabTitle || tab.technical_data)) {
-                generatedSections.push({
+                generatedItems.push({
                   id: `gen_${Date.now()}_${Math.random()}`,
-                  name: tab.tabTitle || "Equipo",
-                  description: (tab.technical_data || []).map(d => `${d.label}: ${d.value} ${d.unit || ''}`).join(' | '),
-                  image: tab.image || '',
-                  qty: 1
+                  equipo: (tab.tabTitle || "Equipo").toUpperCase(),
+                  descripcion: (tab.technical_data || []).map(d => `${d.label}: ${d.value} ${d.unit || ''}`).join(' | '),
+                  media_url: tab.image || '',
+                  media_type: 'image',
+                  activo: true,
+                  qty: 1,
+                  costoUSD: 0,
+                  ventaUSD: 0,
+                  utilidad: 0
                 });
               }
             });
           });
 
-          if (generatedSections.length > 0) {
-            console.log(`[Header] Auto-generated MP with ${generatedSections.length} items from ${fichas.length} sheets.`);
-            config = { sections: generatedSections };
+          if (generatedItems.length > 0) {
+            console.log(`[Header] Auto-generated MP with ${generatedItems.length} items.`);
+            // Wrap in a virtual module for PDF compatibility
+            config = {
+              sections: [{
+                id: 'gen_module_main',
+                titulo: 'EQUIPOS PRINCIPALES DEL PROYECTO',
+                items: generatedItems
+              }]
+            };
           }
         }
       }
@@ -137,9 +147,12 @@ const Header = ({
         const { data: fallbackData } = await supabase
           .from('quotations')
           .select('sections_config')
-          .eq('slug', 'master-plan-concentrado')
+          .eq('slug', 'master-plan') // Updated to the correct one (master-plan)
           .single();
-        config = fallbackData?.sections_config;
+
+        if (fallbackData?.sections_config) {
+          config = fallbackData.sections_config;
+        }
       }
 
       if (!config) throw new Error("No se encontró ninguna configuración de Master Plan.");
@@ -239,7 +252,7 @@ const Header = ({
                   className="absolute -bottom-1 -right-4 translate-x-full hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/80 border border-white/20 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-sm cursor-pointer select-none hover:border-primary/50 transition-colors"
                 >
                   <div className="w-2.5 h-2.5 rounded-full bg-[#39ff14] shadow-[0_0_12px_#39ff14] animate-pulse" />
-                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 5.55</span>
+                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 5.56</span>
                 </div>
               </div>
             )}
