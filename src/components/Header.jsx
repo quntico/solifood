@@ -174,12 +174,11 @@ const Header = ({
       await generateMasterPlanPDF({
         sections: finalSections,
         pdfSettings: config.pdfSettings,
-        clientName: quotationData.client || "CLIENTE",
-        projectName: quotationData.project || "PROYECTO",
+        clientName: client || quotationData.client || "CLIENTE",
+        projectName: project || quotationData.project || "PROYECTO",
         logoUrl: quotationData.logo || logo || config.logoUrl
       });
-
-      toast({ title: "Master Plan Exportado", description: `Concentrado generado para: ${quotationData.project}` });
+      toast({ title: "Master Plan Exportado", description: `Concentrado generado para: ${project} de ${client}` });
     } catch (err) {
       console.error("Master Plan Global Export Error:", err);
       toast({ title: "Error", description: "No se pudo generar el Master Plan. Verifica que exista contenido configurado.", variant: "destructive" });
@@ -253,7 +252,7 @@ const Header = ({
                   className="absolute -bottom-1 -right-4 translate-x-full hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/80 border border-white/20 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-sm cursor-pointer select-none hover:border-primary/50 transition-colors"
                 >
                   <div className="w-2.5 h-2.5 rounded-full bg-[#39ff14] shadow-[0_0_12px_#39ff14] animate-pulse" />
-                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 5.58</span>
+                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 5.59</span>
                 </div>
               </div>
             )}

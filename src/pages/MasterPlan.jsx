@@ -259,14 +259,14 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
         if (propIsAdminAuth !== undefined) setIsAdminAuthenticated(propIsAdminAuth);
     }, [propIsAdminAuth]);
 
-    // SYNC IDENTITY WITH PROPS (Ver 5.55)
+    // SYNC IDENTITY WITH PROPS (Ver 5.59 - Forced Priority)
     useEffect(() => {
         if (quotationData) {
             if (quotationData.client) setClientName(quotationData.client);
             if (quotationData.project) setProjectName(quotationData.project);
             if (quotationData.logo) setLogoUrl(quotationData.logo);
         }
-    }, [quotationData]);
+    }, [quotationData?.client, quotationData?.project, quotationData?.logo]);
 
     useEffect(() => {
         if (!isHydrated) return; // Prevent saving until we have fetched or decided we are the source of truth
@@ -359,25 +359,22 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                 console.log("[MasterPlan] Hydrating from Cloud Slug:", CLOUD_SLUG);
                 const config = finalData.sections_config || {};
 
-                // [METADATA SYNC] Only update metadata if this is the SPECIFIC Master Plan record (Ver 5.58)
-                // This prevents fallback templates from overwriting the current project's identity
+                // [METADATA SYNC] Only update metadata if this is the SPECIFIC Master Plan record (Ver 5.59)
+                // We ALWAYS preserve current project identity from props/DB columns
                 const isProjectSpecificData = finalData.slug === CLOUD_SLUG;
 
                 if (isProjectSpecificData) {
-                    if (config.clientName) setClientName(config.clientName);
-                    if (config.projectName) setProjectName(config.projectName);
-                    if (config.projectDesc) setProjectDesc(config.projectDesc);
-                    if (config.projectDate) setProjectDate(config.projectDate);
                     if (config.mpTitle) setMpTitle(config.mpTitle);
                     if (config.mpSubTitle) setMpSubTitle(config.mpSubTitle);
-                    if (config.logoUrl) setLogoUrl(config.logoUrl);
+                    if (config.projectDesc) setProjectDesc(config.projectDesc);
                 } else {
-                    console.log("[MasterPlan] Data is from Legacy Template - Preserving current project identity.");
-                    // Force the names from props/quotationData if we're in a fallback
-                    if (quotationData) {
-                        if (quotationData.client) setClientName(quotationData.client);
-                        if (quotationData.project) setProjectName(quotationData.project);
-                    }
+                    console.log("[MasterPlan] Data is from Legacy Template - Ignoring legacy names.");
+                }
+
+                // Force project/client from the main quotation record (barra-manicero etc)
+                if (quotationData) {
+                    if (quotationData.client) setClientName(quotationData.client);
+                    if (quotationData.project) setProjectName(quotationData.project);
                 }
 
                 const cloudVideoUrl = finalData.video_url || config.heroVideoUrl;

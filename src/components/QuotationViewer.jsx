@@ -842,6 +842,7 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
       return (
         <div className="flex-1 overflow-y-auto custom-scrollbar" id="main-content-scroll-area">
           <MasterPlan
+            key={`mp-${activeTheme}`}
             isSubmenuMode={true}
             slug={`mp-${activeTheme}`}
             parentSlug={activeTheme}
