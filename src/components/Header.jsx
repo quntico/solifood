@@ -53,54 +53,76 @@ const Header = ({
       return;
     }
 
-    // 2. Otherwise, fetch Master Plan data for THIS project from Supabase
+    // 2. Extract from THIS project (Try embedded first, then cloud)
     setIsExportingMP(true);
     try {
       const currentSlug = quotationData.slug || quotationData.theme_key;
       const mpSlug = `mp-${currentSlug}`;
+      let config = null;
 
-      let { data, error } = await supabase
-        .from('quotations')
-        .select('sections_config')
-        .eq('slug', mpSlug)
-        .single();
+      console.log(`[Header] Attempting export for ${currentSlug}`);
 
-      // SECOND TRY: Without mp- prefix (Some projects might be saved directly)
-      if (error || !data) {
-        console.warn(`Specific MP ${mpSlug} not found. Trying without prefix: ${currentSlug}`);
+      // STEP A: Try embedded config in current Quotation Data (Highest priority - Real time)
+      const embeddedMP = quotationData.sections_config?.find(s => s.component === 'master_plan' || s.id === 'master_plan')?.content;
+      if (embeddedMP) {
+        console.log("[Header] Using embedded Master Plan data from quotation.");
+        config = embeddedMP;
+      }
+
+      // STEP B: If not embedded, fetch specific cloud record
+      if (!config) {
+        console.log(`[Header] No embedded data, fetching from cloud: ${mpSlug}`);
+        const { data: cloudData } = await supabase
+          .from('quotations')
+          .select('sections_config')
+          .eq('slug', mpSlug)
+          .single();
+
+        if (cloudData?.sections_config) {
+          config = cloudData.sections_config;
+        }
+      }
+
+      // STEP C: Try without prefix
+      if (!config) {
         const { data: noPrefixData } = await supabase
           .from('quotations')
           .select('sections_config')
           .eq('slug', currentSlug)
           .single();
-        data = noPrefixData;
-      }
-
-      // FALLBACK: If still not found, try the generic one as template
-      if (!data) {
-        console.warn(`Master Plan for ${mpSlug} not found. Checking embedded config...`);
-        // Use sections_config from quotationData if it contains a master_plan component
-        const embeddedMP = quotationData.sections_config?.find(s => s.component === 'master_plan' || s.id === 'master_plan')?.content;
-
-        if (embeddedMP) {
-          data = { sections_config: embeddedMP };
-        } else {
-          console.warn(`No embedded MP found. Using global fallback...`);
-          const { data: fallbackData } = await supabase
-            .from('quotations')
-            .select('sections_config')
-            .eq('slug', 'master-plan-concentrado')
-            .single();
-          data = fallbackData;
+        if (noPrefixData?.sections_config) {
+          config = noPrefixData.sections_config;
         }
       }
 
-      if (!data) throw new Error("No se encontró ninguna configuración de Master Plan.");
+      // STEP D: Global Fallback as template
+      if (!config) {
+        console.warn("[Header] Falling back to global Master Plan template...");
+        const { data: fallbackData } = await supabase
+          .from('quotations')
+          .select('sections_config')
+          .eq('slug', 'master-plan')
+          .single();
+        config = fallbackData?.sections_config;
+      }
 
-      const config = data.sections_config || {};
+      if (!config) throw new Error("No se encontró ninguna configuración de Master Plan.");
+
+      // DEEP EXTRACTOR: Find the sections array
+      let finalSections = [];
+      if (Array.isArray(config)) {
+        finalSections = config;
+      } else if (config.sections && Array.isArray(config.sections)) {
+        finalSections = config.sections;
+      } else if (typeof config === 'object') {
+        const potentialArray = Object.values(config).find(v => Array.isArray(v) && v.length > 0);
+        if (potentialArray) finalSections = potentialArray;
+      }
+
+      console.log(`[Header] Final sections count: ${finalSections.length}`);
 
       await generateMasterPlanPDF({
-        sections: config.sections || config || [],
+        sections: finalSections,
         pdfSettings: config.pdfSettings,
         clientName: client || config.clientName || "CLIENTE",
         projectName: project || config.projectName || "PROYECTO",
@@ -110,7 +132,7 @@ const Header = ({
       toast({ title: "Master Plan Exportado", description: `Concentrado generado para: ${project}` });
     } catch (err) {
       console.error("Master Plan Global Export Error:", err);
-      toast({ title: "Error", description: "No se pudo generar el Master Plan. Verifica que exista una configuración válida.", variant: "destructive" });
+      toast({ title: "Error", description: "No se pudo generar el Master Plan. Verifica que exista contenido configurado.", variant: "destructive" });
     } finally {
       setIsExportingMP(false);
     }
@@ -181,7 +203,7 @@ const Header = ({
                   className="absolute -bottom-1 -right-4 translate-x-full hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/80 border border-white/20 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-sm cursor-pointer select-none hover:border-primary/50 transition-colors"
                 >
                   <div className="w-2.5 h-2.5 rounded-full bg-[#39ff14] shadow-[0_0_12px_#39ff14] animate-pulse" />
-                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 5.50</span>
+                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 5.51</span>
                 </div>
               </div>
             )}
