@@ -359,15 +359,26 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                 console.log("[MasterPlan] Hydrating from Cloud Slug:", CLOUD_SLUG);
                 const config = finalData.sections_config || {};
 
-                // [METADATA SYNC] Always update metadata if present
-                if (config.clientName) setClientName(config.clientName);
-                if (config.projectName) setProjectName(config.projectName);
-                if (config.projectDesc) setProjectDesc(config.projectDesc);
-                if (config.projectDate) setProjectDate(config.projectDate);
-                if (config.mpTitle) setMpTitle(config.mpTitle);
-                if (config.mpSubTitle) setMpSubTitle(config.mpSubTitle);
-                if (config.logoUrl) setLogoUrl(config.logoUrl);
-                else if (finalData.logo_url) setLogoUrl(finalData.logo_url);
+                // [METADATA SYNC] Only update metadata if this is the SPECIFIC Master Plan record (Ver 5.58)
+                // This prevents fallback templates from overwriting the current project's identity
+                const isProjectSpecificData = finalData.slug === CLOUD_SLUG;
+
+                if (isProjectSpecificData) {
+                    if (config.clientName) setClientName(config.clientName);
+                    if (config.projectName) setProjectName(config.projectName);
+                    if (config.projectDesc) setProjectDesc(config.projectDesc);
+                    if (config.projectDate) setProjectDate(config.projectDate);
+                    if (config.mpTitle) setMpTitle(config.mpTitle);
+                    if (config.mpSubTitle) setMpSubTitle(config.mpSubTitle);
+                    if (config.logoUrl) setLogoUrl(config.logoUrl);
+                } else {
+                    console.log("[MasterPlan] Data is from Legacy Template - Preserving current project identity.");
+                    // Force the names from props/quotationData if we're in a fallback
+                    if (quotationData) {
+                        if (quotationData.client) setClientName(quotationData.client);
+                        if (quotationData.project) setProjectName(quotationData.project);
+                    }
+                }
 
                 const cloudVideoUrl = finalData.video_url || config.heroVideoUrl;
                 if (cloudVideoUrl) setHeroVideoUrl(cloudVideoUrl);
