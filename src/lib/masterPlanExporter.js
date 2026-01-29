@@ -12,17 +12,14 @@ const formatMoney = (v) =>
 const calcItem = (it) => {
     const qty = n(it.qty);
     const costoUSD = n(it.costoUSD);
-    const ventaUSD = n(it.ventaUSD);
     const util = n(it.utilidad);
 
-    let unitVenta = ventaUSD;
-    if (ventaUSD === 0 && costoUSD > 0) {
-        unitVenta = costoUSD / (1 - (util / 100));
-    }
+    // UNIFIED CALCULATION LOGIC (Ver 5.63) - MUST MATCH MasterPlan.jsx Markup Formula
+    const ventaUnitFinal = costoUSD * (1 + (util / 100));
 
     return {
-        ventaUnitFinal: unitVenta,
-        totalVenta: unitVenta * qty
+        ventaUnitFinal: ventaUnitFinal,
+        totalVenta: ventaUnitFinal * qty
     };
 };
 
