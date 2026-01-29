@@ -141,19 +141,26 @@ const Header = ({
         }
       }
 
-      // STEP E: Global Fallback as template
+      // STEP E: Global Fallback as template (Primary)
       if (!config) {
-        console.warn("[Header] Falling back to global Master Plan template...");
-
+        console.warn("[Header] Falling back to global Master Plan template (master-plan-concentrado)...");
         const { data: fallbackData } = await supabase
           .from('quotations')
           .select('sections_config')
-          .eq('slug', 'master-plan') // Updated to the correct one (master-plan)
+          .eq('slug', 'master-plan-concentrado')
           .single();
+        if (fallbackData?.sections_config) config = fallbackData.sections_config;
+      }
 
-        if (fallbackData?.sections_config) {
-          config = fallbackData.sections_config;
-        }
+      // STEP F: Secondary Global Fallback (Legacy/Original)
+      if (!config) {
+        console.warn("[Header] Falling back to legacy master-plan slug...");
+        const { data: fallbackLegacy } = await supabase
+          .from('quotations')
+          .select('sections_config')
+          .eq('slug', 'master-plan')
+          .single();
+        if (fallbackLegacy?.sections_config) config = fallbackLegacy.sections_config;
       }
 
       if (!config) throw new Error("No se encontró ninguna configuración de Master Plan.");
@@ -252,7 +259,7 @@ const Header = ({
                   className="absolute -bottom-1 -right-4 translate-x-full hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/80 border border-white/20 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-sm cursor-pointer select-none hover:border-primary/50 transition-colors"
                 >
                   <div className="w-2.5 h-2.5 rounded-full bg-[#39ff14] shadow-[0_0_12px_#39ff14] animate-pulse" />
-                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 5.59</span>
+                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 5.60</span>
                 </div>
               </div>
             )}

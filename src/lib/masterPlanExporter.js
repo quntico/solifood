@@ -211,17 +211,22 @@ export const generateMasterPlanPDF = async (data) => {
         }
     });
 
-    const finalY = doc.lastAutoTable.finalY + 8;
-    if (finalY < 185) {
-        const totalBoxWidth = 90; // Aumentado para evitar solapamiento
-        const tableRightPos = 282;
-        doc.setFillColor(0, 0, 0);
-        doc.rect(tableRightPos - totalBoxWidth, finalY, totalBoxWidth, 14, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(10); // Un poco más pequeño para dejar aire
-        doc.text("TOTAL GENERAL", tableRightPos - totalBoxWidth + 5, finalY + 9);
-        doc.setFontSize(15);
-        doc.text(formatMoney(grandTotal), tableRightPos - 5, finalY + 9, { align: 'right' });
+    // Ver 5.60: Robust Check for drawn table
+    if (doc.lastAutoTable && doc.lastAutoTable.finalY) {
+        const finalY = doc.lastAutoTable.finalY + 8;
+        if (finalY < 185) {
+            const totalBoxWidth = 90;
+            const tableRightPos = 282;
+            doc.setFillColor(0, 0, 0);
+            doc.rect(tableRightPos - totalBoxWidth, finalY, totalBoxWidth, 14, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(10);
+            doc.text("TOTAL GENERAL", tableRightPos - totalBoxWidth + 5, finalY + 9);
+            doc.setFontSize(15);
+            doc.text(formatMoney(grandTotal), tableRightPos - 5, finalY + 9, { align: 'right' });
+        }
+    } else {
+        console.warn("[MasterPlanExporter] No autoTable was drawn. Skipping total calculation.");
     }
 
     doc.save(`${projectName.replace(/\s+/g, '_')}_MasterPlan.pdf`);
