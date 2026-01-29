@@ -63,7 +63,15 @@ const Header = ({
       console.log(`[Header] Attempting export for ${currentSlug}`);
 
       // STEP A: Try embedded config in current Quotation Data (Highest priority - Real time)
-      const embeddedMP = quotationData.sections_config?.find(s => s.component === 'master_plan' || s.id === 'master_plan')?.content;
+      let embeddedMP = null;
+      const sConfig = quotationData.sections_config;
+
+      if (Array.isArray(sConfig)) {
+        embeddedMP = sConfig.find(s => s.component === 'master_plan' || s.id === 'master_plan')?.content;
+      } else if (sConfig?.sections && Array.isArray(sConfig.sections)) {
+        embeddedMP = sConfig.sections.find(s => s.component === 'master_plan' || s.id === 'master_plan')?.content;
+      }
+
       if (embeddedMP) {
         console.log("[Header] Using embedded Master Plan data from quotation.");
         config = embeddedMP;
@@ -259,7 +267,7 @@ const Header = ({
                   className="absolute -bottom-1 -right-4 translate-x-full hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/80 border border-white/20 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-sm cursor-pointer select-none hover:border-primary/50 transition-colors"
                 >
                   <div className="w-2.5 h-2.5 rounded-full bg-[#39ff14] shadow-[0_0_12px_#39ff14] animate-pulse" />
-                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 5.60</span>
+                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 5.61</span>
                 </div>
               </div>
             )}
