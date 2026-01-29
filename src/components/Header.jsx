@@ -77,34 +77,42 @@ const Header = ({
         config = embeddedMP;
       }
 
-      // STEP B: If not embedded, fetch specific cloud record
+      // STEP B: If not embedded, fetch specific cloud record (Universal Slug Resolver Ver 5.62)
       if (!config) {
-        console.log(`[Header] No embedded data, fetching from cloud: ${mpSlug}`);
-        const { data: cloudData } = await supabase
-          .from('quotations')
-          .select('sections_config')
-          .eq('slug', mpSlug)
-          .single();
+        const slugsToTry = [
+          mpSlug, // mp-barra-manicero
+          `mp-default-home_sanborns_${currentSlug}`, // mp-default-home_sanborns_barra-manicero
+          'master-plan-concentrado',
+          'master-plan'
+        ];
 
-        if (cloudData?.sections_config) {
-          config = cloudData.sections_config;
+        for (const slug of slugsToTry) {
+          console.log(`[Header] Trying cloud fetch for: ${slug}`);
+          const { data: cloudData } = await supabase
+            .from('quotations')
+            .select('sections_config')
+            .eq('slug', slug)
+            .single();
+
+          if (cloudData?.sections_config) {
+            console.log(`[Header] Found data in cloud slug: ${slug}`);
+            config = cloudData.sections_config;
+            break;
+          }
         }
       }
 
-      // STEP C: AUTO-GENERATOR FROM FICHAS (New Intelligence Ver 5.56)
+      // STEP C: AUTO-GENERATOR FROM FICHAS (Fallback if Cloud fails)
       if (!config) {
         console.log("[Header] Attempting auto-generation from Technical Sheets...");
-
         const sectionsData = quotationData.sections_config?.sections || (Array.isArray(quotationData.sections_config) ? quotationData.sections_config : []);
         const fichas = sectionsData.filter(s => s.component === 'ficha' || s.id === 'ficha' || s.id?.includes('ficha'));
 
         if (fichas && fichas.length > 0) {
           const generatedItems = [];
-
           fichas.forEach(f => {
             const fContent = f.content;
             const tabs = Array.isArray(fContent) ? fContent : (fContent ? [fContent] : []);
-
             tabs.forEach(tab => {
               if (tab && (tab.tabTitle || tab.technical_data)) {
                 generatedItems.push({
@@ -124,8 +132,6 @@ const Header = ({
           });
 
           if (generatedItems.length > 0) {
-            console.log(`[Header] Auto-generated MP with ${generatedItems.length} items.`);
-            // Wrap in a virtual module for PDF compatibility
             config = {
               sections: [{
                 id: 'gen_module_main',
@@ -135,40 +141,6 @@ const Header = ({
             };
           }
         }
-      }
-
-      // STEP D: Try without prefix (Legacy)
-      if (!config) {
-        const { data: noPrefixData } = await supabase
-          .from('quotations')
-          .select('sections_config')
-          .eq('slug', currentSlug)
-          .single();
-        if (noPrefixData?.sections_config) {
-          config = noPrefixData.sections_config;
-        }
-      }
-
-      // STEP E: Global Fallback as template (Primary)
-      if (!config) {
-        console.warn("[Header] Falling back to global Master Plan template (master-plan-concentrado)...");
-        const { data: fallbackData } = await supabase
-          .from('quotations')
-          .select('sections_config')
-          .eq('slug', 'master-plan-concentrado')
-          .single();
-        if (fallbackData?.sections_config) config = fallbackData.sections_config;
-      }
-
-      // STEP F: Secondary Global Fallback (Legacy/Original)
-      if (!config) {
-        console.warn("[Header] Falling back to legacy master-plan slug...");
-        const { data: fallbackLegacy } = await supabase
-          .from('quotations')
-          .select('sections_config')
-          .eq('slug', 'master-plan')
-          .single();
-        if (fallbackLegacy?.sections_config) config = fallbackLegacy.sections_config;
       }
 
       if (!config) throw new Error("No se encontró ninguna configuración de Master Plan.");
@@ -267,7 +239,7 @@ const Header = ({
                   className="absolute -bottom-1 -right-4 translate-x-full hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/80 border border-white/20 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-sm cursor-pointer select-none hover:border-primary/50 transition-colors"
                 >
                   <div className="w-2.5 h-2.5 rounded-full bg-[#39ff14] shadow-[0_0_12px_#39ff14] animate-pulse" />
-                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 5.61</span>
+                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 5.62</span>
                 </div>
               </div>
             )}
