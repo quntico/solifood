@@ -183,11 +183,11 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
     const [isParamsModalOpen, setIsParamsModalOpen] = useState(false);
     const [isTemplateEditorOpen, setIsTemplateEditorOpen] = useState(false);
 
-    const [clientName, setClientName] = useState(() => quotationData?.client || localStorage.getItem("solifood_mp_client") || "YADIRA RAMIREZ");
-    const [projectName, setProjectName] = useState(() => quotationData?.project || localStorage.getItem("solifood_mp_project") || "CDA 2000");
-    const [projectDesc, setProjectDesc] = useState(() => localStorage.getItem("solifood_mp_desc") || "Proyecto desde grano + 2 líneas de tabletas + polvo bebida + empaque.");
-    const [projectDate, setProjectDate] = useState(() => localStorage.getItem("solifood_mp_date") || new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' }));
-    const [logoUrl, setLogoUrl] = useState(() => quotationData?.logo || localStorage.getItem("solifood_mp_logo") || "/solifood-logo-v418.png");
+    const [clientName, setClientName] = useState(() => quotationData?.client || "CLIENTE");
+    const [projectName, setProjectName] = useState(() => quotationData?.project || "PROYECTO");
+    const [projectDesc, setProjectDesc] = useState(() => "Resumen ejecutivo del proyecto industrial.");
+    const [projectDate, setProjectDate] = useState(() => new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' }));
+    const [logoUrl, setLogoUrl] = useState(() => quotationData?.logo || "/solifood-logo-v418.png");
 
     const [mpTitle, setMpTitle] = useState(() => localStorage.getItem("solifood_mp_title") || "MASTER PLAN");
     const [mpSubTitle, setMpSubTitle] = useState(() => localStorage.getItem("solifood_mp_subtitle") || "INDUSTRIAL CENTER");
