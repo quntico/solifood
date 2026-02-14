@@ -1,18 +1,14 @@
 import React, { useState } from 'react';
-import { Search, Menu, FileDown, DollarSign, FileText, Download } from 'lucide-react';
+import { Search, Menu, FileDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSelector from '@/components/LanguageSelector';
 import Banner from '@/components/Banner';
 import MobileMenu from '@/components/MobileMenu';
 import { BRANDS, DEFAULT_BRAND } from '@/lib/brands';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { generateMasterPlanPDF } from '@/lib/masterPlanExporter';
+
+import ExportCenterModal from '@/components/ExportCenterModal';
+
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { useLocation } from 'react-router-dom';
@@ -37,142 +33,20 @@ const Header = ({
   activeTabMap,
   setIsEditorMode,
   onAdminClick,
-  isScrolled
+  isScrolled,
+  onQuotationUpdate
 }) => {
   const { t } = useLanguage();
   const { toast } = useToast();
   const location = useLocation();
+  if (!quotationData) return null; // Prevent crash if data is not yet loaded
+
   const { company, project, client, logo, logo_size, banner_text, banner_scale, banner_direction, hide_banner, brand_color } = quotationData;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isExportingMP, setIsExportingMP] = useState(false);
+  const [isExportCenterOpen, setIsExportCenterOpen] = useState(false);
 
-  const handleMasterPlanExport = async () => {
-    // 1. If we are on the Master Plan page, use the global event (which uses local state)
-    if (location.pathname.includes('/master-plan')) {
-      window.dispatchEvent(new CustomEvent('SOLIFOOD_EXPORT_MASTERPLAN'));
-      return;
-    }
 
-    // 2. Extract from THIS project (Try embedded first, then cloud)
-    setIsExportingMP(true);
-    try {
-      const currentSlug = quotationData.slug || quotationData.theme_key;
-      const mpSlug = `mp-${currentSlug}`;
-      let config = null;
-
-      console.log(`[Header] Attempting export for ${currentSlug}`);
-
-      // STEP A: Try embedded config in current Quotation Data (Highest priority - Real time)
-      let embeddedMP = null;
-      const sConfig = quotationData.sections_config;
-
-      if (Array.isArray(sConfig)) {
-        embeddedMP = sConfig.find(s => s.component === 'master_plan' || s.id === 'master_plan')?.content;
-      } else if (sConfig?.sections && Array.isArray(sConfig.sections)) {
-        embeddedMP = sConfig.sections.find(s => s.component === 'master_plan' || s.id === 'master_plan')?.content;
-      }
-
-      if (embeddedMP) {
-        console.log("[Header] Using embedded Master Plan data from quotation.");
-        config = embeddedMP;
-      }
-
-      // STEP B: If not embedded, fetch specific cloud record (Universal Slug Resolver Ver 5.62)
-      if (!config) {
-        const slugsToTry = [
-          mpSlug, // mp-barra-manicero
-          `mp-default-home_sanborns_${currentSlug}`, // mp-default-home_sanborns_barra-manicero
-          'master-plan-concentrado',
-          'master-plan'
-        ];
-
-        for (const slug of slugsToTry) {
-          console.log(`[Header] Trying cloud fetch for: ${slug}`);
-          const { data: cloudData } = await supabase
-            .from('quotations')
-            .select('sections_config')
-            .eq('slug', slug)
-            .single();
-
-          if (cloudData?.sections_config) {
-            console.log(`[Header] Found data in cloud slug: ${slug}`);
-            config = cloudData.sections_config;
-            break;
-          }
-        }
-      }
-
-      // STEP C: AUTO-GENERATOR FROM FICHAS (Fallback if Cloud fails)
-      if (!config) {
-        console.log("[Header] Attempting auto-generation from Technical Sheets...");
-        const sectionsData = quotationData.sections_config?.sections || (Array.isArray(quotationData.sections_config) ? quotationData.sections_config : []);
-        const fichas = sectionsData.filter(s => s.component === 'ficha' || s.id === 'ficha' || s.id?.includes('ficha'));
-
-        if (fichas && fichas.length > 0) {
-          const generatedItems = [];
-          fichas.forEach(f => {
-            const fContent = f.content;
-            const tabs = Array.isArray(fContent) ? fContent : (fContent ? [fContent] : []);
-            tabs.forEach(tab => {
-              if (tab && (tab.tabTitle || tab.technical_data)) {
-                generatedItems.push({
-                  id: `gen_${Date.now()}_${Math.random()}`,
-                  equipo: (tab.tabTitle || "Equipo").toUpperCase(),
-                  descripcion: (tab.technical_data || []).map(d => `${d.label}: ${d.value} ${d.unit || ''}`).join(' | '),
-                  media_url: tab.image || '',
-                  media_type: 'image',
-                  activo: true,
-                  qty: 1,
-                  costoUSD: 0,
-                  ventaUSD: 0,
-                  utilidad: 0
-                });
-              }
-            });
-          });
-
-          if (generatedItems.length > 0) {
-            config = {
-              sections: [{
-                id: 'gen_module_main',
-                titulo: 'EQUIPOS PRINCIPALES DEL PROYECTO',
-                items: generatedItems
-              }]
-            };
-          }
-        }
-      }
-
-      if (!config) throw new Error("No se encontró ninguna configuración de Master Plan.");
-
-      // DEEP EXTRACTOR: Find the sections array
-      let finalSections = [];
-      if (Array.isArray(config)) {
-        finalSections = config;
-      } else if (config.sections && Array.isArray(config.sections)) {
-        finalSections = config.sections;
-      } else if (typeof config === 'object') {
-        const potentialArray = Object.values(config).find(v => Array.isArray(v) && v.length > 0);
-        if (potentialArray) finalSections = potentialArray;
-      }
-
-      console.log(`[Header] Final sections count: ${finalSections.length}. Proceeding to PDF generation.`);
-
-      await generateMasterPlanPDF({
-        sections: finalSections,
-        pdfSettings: config.pdfSettings,
-        clientName: client || quotationData.client || "CLIENTE",
-        projectName: project || quotationData.project || "PROYECTO",
-        logoUrl: quotationData.logo || logo || config.logoUrl
-      });
-      toast({ title: "Master Plan Exportado", description: `Concentrado generado para: ${project} de ${client}` });
-    } catch (err) {
-      console.error("Master Plan Global Export Error:", err);
-      toast({ title: "Error", description: "No se pudo generar el Master Plan. Verifica que exista contenido configurado.", variant: "destructive" });
-    } finally {
-      setIsExportingMP(false);
-    }
-  };
 
   // Determine Brand Logo
   const brandId = brand_color || DEFAULT_BRAND;
@@ -239,7 +113,7 @@ const Header = ({
                   className="absolute -bottom-1 -right-4 translate-x-full hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/80 border border-white/20 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-sm cursor-pointer select-none hover:border-primary/50 transition-colors"
                 >
                   <div className="w-2.5 h-2.5 rounded-full bg-[#39ff14] shadow-[0_0_12px_#39ff14] animate-pulse" />
-                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 5.63</span>
+                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 6.0</span>
                 </div>
               </div>
             )}
@@ -259,49 +133,22 @@ const Header = ({
           {/* Right section: Language selector and Search button */}
           <div className="flex-1 flex items-center justify-end gap-1 sm:gap-2">
             <div className="scale-90 sm:scale-100 origin-right flex items-center gap-1 sm:gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white hover:bg-gray-800 gap-2 h-9 border border-white/10 px-3">
-                    <FileDown className="h-4 w-4" />
-                    <span className="hidden sm:inline font-bold text-xs">PDF</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-[calc(100vw-2rem)] sm:w-64 bg-zinc-950 border-white/10">
-                  <DropdownMenuItem
-                    onClick={() => window.dispatchEvent(new CustomEvent('SOLIFOOD_EXPORT_PROPUESTA'))}
-                    className="flex gap-3 p-3 focus:bg-primary/20 cursor-pointer"
-                  >
-                    <DollarSign className="w-4 h-4 text-primary" />
-                    <div className="flex flex-col">
-                      <span className="font-bold text-sm">Propuesta Económica</span>
-                      <span className="text-[10px] text-gray-500">Inversión y desglose total</span>
-                    </div>
-                  </DropdownMenuItem>
 
-                  <DropdownMenuItem
-                    onClick={handleMasterPlanExport}
-                    disabled={isExportingMP}
-                    className="flex gap-3 p-3 focus:bg-primary/20 cursor-pointer"
-                  >
-                    <FileText className="w-4 h-4 text-yellow-400" />
-                    <div className="flex flex-col">
-                      <span className="font-bold text-sm">Master Plan</span>
-                      <span className="text-[10px] text-gray-500">{isExportingMP ? 'Generando...' : 'Concentrado de proyectos'}</span>
-                    </div>
-                  </DropdownMenuItem>
-
-                  <DropdownMenuItem
-                    onClick={() => window.dispatchEvent(new CustomEvent('SOLIFOOD_EXPORT_PDF_DOC'))}
-                    className="flex gap-3 p-3 focus:bg-primary/20 cursor-pointer"
-                  >
-                    <Download className="w-4 h-4 text-green-400" />
-                    <div className="flex flex-col">
-                      <span className="font-bold text-sm">Cotización PDF</span>
-                      <span className="text-[10px] text-gray-500">Documento original oficial</span>
-                    </div>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {/* Unified PDF Button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsExportCenterOpen(true)}
+                className="text-gray-400 hover:text-white hover:bg-gray-800 gap-2 h-9 border border-white/10 px-3 transition-all hover:border-primary/50"
+              >
+                <div className="relative flex items-center gap-2">
+                  {quotationData.sections_config?.export_center_items?.length > 0 && (
+                    <span className="w-2 h-2 bg-[#39ff14] rounded-full animate-pulse shadow-[0_0_8px_#39ff14]" />
+                  )}
+                  <FileDown className="h-4 w-4" />
+                </div>
+                <span className="hidden sm:inline font-bold text-xs">PDF & DOCS</span>
+              </Button>
 
               <LanguageSelector />
             </div>
@@ -343,6 +190,14 @@ const Header = ({
         isEditorMode={isEditorMode}
         setIsEditorMode={setIsEditorMode}
         onAdminClick={onAdminClick}
+      />
+
+      <ExportCenterModal
+        isOpen={isExportCenterOpen}
+        onClose={() => setIsExportCenterOpen(false)}
+        quotationData={quotationData}
+        isEditorMode={isEditorMode}
+        onUpdate={onQuotationUpdate}
       />
     </>
   );

@@ -74,6 +74,7 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
           phase1_duration: themeDataFromApp.phase1_duration ?? 5,
           phase2_duration: themeDataFromApp.phase2_duration ?? 75,
           phase3_duration: themeDataFromApp.phase3_duration ?? 10,
+          phase4_duration: themeDataFromApp.phase4_duration ?? 5,
           phase1_name: themeDataFromApp.phase1_name ?? 'Confirmación y Orden',
           phase2_name: themeDataFromApp.phase2_name ?? 'Tiempo de Fabricación',
           phase3_name: themeDataFromApp.phase3_name ?? 'Transporte',
@@ -271,7 +272,19 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
 
   const handleInputChange = (e) => {
     const { name, value, type } = e.target;
-    const processedValue = type === 'number' ? parseInt(value, 10) || 0 : value;
+    let processedValue = type === 'number' ? parseInt(value, 10) || 0 : value;
+
+    // ROBUST SLUG SANITIZATION (v5.64)
+    if (name === 'slug' && typeof processedValue === 'string') {
+      processedValue = processedValue.toLowerCase()
+        .trim()
+        .replace(/\s+/g, '-')           // Reemplaza espacios con -
+        .replace(/[^\w-]+/g, '')       // Elimina caracteres especiales
+        .replace(/--+/g, '-')         // Evita guiones dobles
+        .replace(/^-+/, '')           // Elimina guiones al inicio
+        .replace(/-+$/, '');          // Elimina guiones al final
+    }
+
     updateState({ [name]: processedValue });
   };
 
@@ -333,20 +346,36 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
         ? {
           sections: currentConfig,
           heroVideoUrl: currentThemeData.video_url,
-          // Redundant Header Info Fallback
+          // METADATA REDUNDANCY (v5.64)
           title: currentThemeData.title,
           subtitle: currentThemeData.subtitle,
-          company: currentThemeData.company
+          company: currentThemeData.company,
+          slug: currentThemeData.slug,
+          phase1_duration: currentThemeData.phase1_duration,
+          phase2_duration: currentThemeData.phase2_duration,
+          phase3_duration: currentThemeData.phase3_duration,
+          phase1_name: currentThemeData.phase1_name,
+          phase2_name: currentThemeData.phase2_name,
+          phase3_name: currentThemeData.phase3_name,
+          phase4_name: currentThemeData.phase4_name
         }
         : {
           ...(currentConfig || {}),
           sections: currentConfig?.sections || [],
           heroVideoUrl: currentThemeData.video_url,
           heroVideoUpdatedAt: new Date().toISOString(),
-          // Redundant Header Info Fallback
+          // METADATA REDUNDANCY (v5.64)
           title: currentThemeData.title,
           subtitle: currentThemeData.subtitle,
-          company: currentThemeData.company
+          company: currentThemeData.company,
+          slug: currentThemeData.slug,
+          phase1_duration: currentThemeData.phase1_duration,
+          phase2_duration: currentThemeData.phase2_duration,
+          phase3_duration: currentThemeData.phase3_duration,
+          phase1_name: currentThemeData.phase1_name,
+          phase2_name: currentThemeData.phase2_name,
+          phase3_name: currentThemeData.phase3_name,
+          phase4_name: currentThemeData.phase4_name
         };
 
       const dataToSave = {
@@ -378,10 +407,14 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
         let saveSuccess = false;
         let lastError = null;
 
-        // Dynamic recovery strategy for missing columns (42703 error)
+        // UNIFIED IDENTIFIER STRATEGY (v5.64)
+        const matchCriteria = currentThemeData.id
+          ? { id: currentThemeData.id }
+          : { theme_key: activeTheme };
+
         for (let i = 0; i < 5; i++) {
-          console.log(`[AdminModal] Attempting Supabase update for ${activeTheme}, attempt ${i + 1}`, attemptData);
-          const { error, status } = await supabase.from('quotations').update(attemptData).eq('theme_key', activeTheme);
+          console.log(`[AdminModal] Attempting Supabase update via ${JSON.stringify(matchCriteria)}`, attemptData);
+          const { error, status } = await supabase.from('quotations').update(attemptData).match(matchCriteria);
 
           if (!error) {
             console.log(`[AdminModal] Supabase update success! Status: ${status}`);
@@ -558,19 +591,24 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
     }
   }
 
-  const handleCopyLink = () => {
-    if (currentThemeData?.slug) {
-      navigator.clipboard.writeText(`https://www.solifood.site/cotizacion/${currentThemeData.slug}`);
-      toast({ title: "Copiado 📋", description: "Enlace en portapapeles (solifood.site)." });
-    } else {
-      toast({ title: "Sin Slug", description: "Esta cotización no tiene slug.", variant: "destructive" });
+  const handleCopyLink = async () => {
+    try {
+      // Auto-save before copy to ensure the slug exists in DB
+      await saveChanges(false, true);
+      const url = `${window.location.origin}/cotizacion/${currentThemeData.slug}`;
+      await navigator.clipboard.writeText(url);
+      toast({ title: "Link Copiado 📋", description: "Enlace listo para compartir." });
+    } catch (err) {
+      console.error(err);
     }
   };
 
-  const handleOpenLink = () => {
+  const handleOpenLink = async () => {
     if (currentThemeData?.slug) {
-      // Force solifood.site as requested
-      window.open(`https://www.solifood.site/cotizacion/${currentThemeData.slug}`, '_blank');
+      // Auto-save before open to prevent 404s
+      await saveChanges(false, true);
+      const url = `${window.location.origin}/cotizacion/${currentThemeData.slug}`;
+      window.open(url, '_blank');
     }
   };
 
@@ -908,7 +946,8 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
                     </div>
                     <div className="space-y-3 p-4 bg-white/5 rounded-lg border border-white/10 backdrop-blur-sm">
                       <Label className="flex items-center gap-2 text-primary font-semibold"><Truck className="w-4 h-4" />{t('adminModal.phase4')}</Label>
-                      <Input name="phase4_name" value={currentThemeData.phase4_name} onChange={handleInputChange} className="bg-black/20 border-white/10 text-white focus:border-primary" />
+                      <Input name="phase4_name" value={currentThemeData.phase4_name} onChange={handleInputChange} className="bg-black/20 border-white/10 text-white focus:border-primary mb-2" />
+                      <Input name="phase4_duration" type="number" value={currentThemeData.phase4_duration} onChange={handleInputChange} className="bg-black/20 border-white/10 text-white focus:border-primary" />
                     </div>
                   </div>
                 </div>

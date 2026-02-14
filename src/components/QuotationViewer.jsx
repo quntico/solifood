@@ -881,6 +881,16 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
     );
   };
 
+  const handleLocalStateUpdate = (fullConfig) => {
+    setThemes(prev => ({
+      ...prev,
+      [activeTheme]: {
+        ...prev[activeTheme],
+        sections_config: fullConfig
+      }
+    }));
+  };
+
   return (
     <>
       <Helmet>
@@ -970,6 +980,7 @@ const QuotationViewer = ({ initialQuotationData, allThemes = {}, isAdminView = f
             setIsEditorMode={setIsEditorMode}
             onAdminClick={() => isAdminView && setShowAdminModal(true)}
             isScrolled={isHeaderScrolled}
+            onQuotationUpdate={handleLocalStateUpdate}
           />
           <div id="main-content-scroll-area" className="flex-1 overflow-y-auto overflow-x-hidden pb-20 lg:pb-0">
             {renderActiveComponent()}
