@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Check, ChevronsUpDown, X, Save, Eraser, Settings, Palette, Scale, Upload, Image, Loader2, Minimize, Timer, PlaySquare, Clock, CheckCircle, Wrench, Ship, Truck, Copy, Link as LinkIcon, ClipboardCopy, Star, Home, MonitorSpeaker as Announce, MoveHorizontal, EyeOff, ExternalLink, QrCode, RefreshCw, Trash2, Download } from 'lucide-react';
+import { Check, ChevronsUpDown, X, Save, Eraser, Settings, Palette, Scale, Upload, Image, Loader2, Minimize, Timer, PlaySquare, Clock, CheckCircle, Wrench, Ship, Truck, Copy, Link as LinkIcon, ClipboardCopy, Star, Home, MonitorSpeaker as Announce, MoveHorizontal, EyeOff, ExternalLink, QrCode, RefreshCw, Trash2, Download, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 import { BRANDS } from '@/lib/brands'; // Import brands
 import { generateQRAsPDF } from '@/lib/pdfGenerator';
+import { generateControlPointV2, restoreFromControlPointV2 } from '@/utils/backupSystemV2';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
 const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setActiveTheme, onCloneClick, onPreviewUpdate }) => {
   // --- STATE INITIALIZATION WITH SAFETY CHECKS ---
@@ -39,11 +42,13 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
   const [isDeleting, setIsDeleting] = useState(false);
   const [openCombobox, setOpenCombobox] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  const [showBackupPanel, setShowBackupPanel] = useState(false);
   const [isManageMode, setIsManageMode] = useState(false); // Toggle specifically for bulk management
   const [isConfigMode, setIsConfigMode] = useState(false); // NEW: Toggle for brand configuration
 
   const logoFileInputRef = useRef(null);
   const faviconFileInputRef = useRef(null);
+  const restoreFileInputRef = useRef(null);
   const qrRef = useRef(null);
 
 
@@ -90,15 +95,27 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
   }, [isOpen, activeTheme]); // FIXED: Removed themes to prevent save-loops
 
   // Preview updates with debounce to prevent excessive re-renders
+  // Preview updates with debounce to prevent excessive re-renders
   useEffect(() => {
     if (!isOpen || !onPreviewUpdate || !currentThemeData) return;
 
     const timer = setTimeout(() => {
-      onPreviewUpdate(currentThemeData);
+      // SAFE PREVIEW STRATEGY:
+      // When typing a new slug, the URL hasn't changed yet. 
+      // If we send the new slug to the preview, it might try to navigate to a non-existent URL (404),
+      // triggering a redirect that unmounts this modal.
+      // We force the preview to use the STABLE slug (from db/props) until the user explicitly saves.
+
+      const safeData = {
+        ...currentThemeData,
+        slug: (themes && themes[activeTheme]) ? themes[activeTheme].slug : currentThemeData.slug
+      };
+
+      onPreviewUpdate(safeData);
     }, 100); // 100ms debounce for preview
 
     return () => clearTimeout(timer);
-  }, [currentThemeData, onPreviewUpdate, isOpen]);
+  }, [currentThemeData, onPreviewUpdate, isOpen, themes, activeTheme]);
 
 
   // --- HANDLERS ---
@@ -265,7 +282,8 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
     if (!currentThemeData) return;
     setCurrentThemeData(prev => {
       const newState = { ...prev, ...updates };
-      if (onPreviewUpdate) onPreviewUpdate(newState);
+      // REMOVED: if (onPreviewUpdate) onPreviewUpdate(newState); 
+      // Rely on the debounced useEffect instead to prevent spam and allow safe-slug logic.
       return newState;
     });
   };
@@ -609,6 +627,99 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
       await saveChanges(false, true);
       const url = `${window.location.origin}/cotizacion/${currentThemeData.slug}`;
       window.open(url, '_blank');
+    }
+  };
+
+  const handleGenerateControlPoint = async () => {
+    try {
+      if (!currentThemeData) return;
+      setIsSaving(true);
+      toast({ title: "Iniciando Disaster Recovery Backup", description: "Analizando integridad y dependencias..." });
+
+      await generateControlPointV2(currentThemeData, (status) => {
+        // Opcional: Podríamos mostrar el progreso en un toast updatable o estado local
+        console.log(`[Backup V2]: ${status}`);
+      });
+
+      toast({
+        title: "Punto de Control V2 Generado ✅",
+        description: "Backup de recuperación total descargado y verificado.",
+        duration: 5000
+      });
+
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Error Fatal", description: err.message, variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+
+
+  const handleRestoreClick = () => {
+    if (confirm("⚠️ ¿Estás seguro de restaurar un proyecto?\n\nSe creará una COPIA nueva. No sobrescribirá el actual.")) {
+      restoreFileInputRef.current.click();
+    }
+  };
+
+  const handleRestoreFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      setIsSaving(true);
+      toast({ title: "Iniciando Restauración...", description: "Procesando Punto de Control V2..." });
+
+      const result = await restoreFromControlPointV2(file, (status) => {
+        console.log(`[Restore]: ${status}`);
+      });
+
+      if (result.success) {
+        toast({
+          title: "¡Restauración Exitosa! 🎉",
+          description: `Proyecto recuperado como: ${result.newSlug}`,
+          duration: 5000
+        });
+        // Opcional: Recargar temas
+        window.location.reload();
+      }
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Error al Restaurar", description: err.message, variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+      e.target.value = ""; // Reset input
+    }
+  };
+
+  const handleExportProjectZip = async () => {
+    try {
+      if (!currentThemeData) return;
+      setIsSaving(true);
+      const zip = new JSZip();
+
+      // 1. Data JSON
+      const jsonData = JSON.stringify(currentThemeData, null, 2);
+      zip.file("project_data.json", jsonData);
+
+      // 2. Readme
+      const readme = `Proyecto: ${currentThemeData.project}
+Cliente: ${currentThemeData.client}
+Fecha Exportación: ${new Date().toLocaleString()}
+Versión Sistema: 6.0`;
+      zip.file("README.txt", readme);
+
+      // 3. Generate
+      const content = await zip.generateAsync({ type: "blob" });
+      saveAs(content, `backup_${currentThemeData.slug || 'project'}_v6.0.zip`);
+
+      toast({ title: "Respaldo Creado 📦", description: "ZIP generado correctamente." });
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Error", description: "Fallo al generar ZIP.", variant: "destructive" });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -958,6 +1069,7 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
                 </div>
                 <input type="file" ref={logoFileInputRef} onChange={(e) => handleFileChange(e, 'logo')} accept="image/png, image/jpeg, image/svg+xml" className="hidden" />
                 <input type="file" ref={faviconFileInputRef} onChange={(e) => handleFileChange(e, 'favicon')} accept="image/x-icon, image/png, image/svg+xml" className="hidden" />
+                <input type="file" ref={restoreFileInputRef} onChange={handleRestoreFileChange} accept=".zip" className="hidden" />
               </div>
             </div>
 
@@ -978,14 +1090,24 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
                 {!isEditingHome && (
                   <Button variant="secondary" onClick={handleSetAsHome} className="bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 w-full"><Home className="h-4 w-4 mr-2" />{t('adminModal.setAsHomePage')}</Button>
                 )}
-                <Button variant="outline" onClick={() => window.location.href = window.location.href.split('?')[0] + '?t=' + new Date().getTime()} className="border-primary text-primary hover:bg-primary/10 w-full"><RefreshCw className="h-4 w-4 mr-2" />Ver Cambios en Vivo</Button>
+                {/* Botón Compacto para Disaster Recovery */}
+                <Button
+                  variant="outline"
+                  onClick={() => setShowBackupPanel(true)}
+                  className="col-span-1 sm:col-span-2 border-blue-900/50 text-blue-400 hover:bg-blue-900/20 hover:text-blue-300"
+                >
+                  <ShieldCheck className="h-4 w-4 mr-2" />
+                  Centro de Recuperación y Backups
+                </Button>
+
+                <Button variant="outline" onClick={() => window.location.href = window.location.href.split('?')[0] + '?t=' + new Date().getTime()} className="col-span-1 sm:col-span-2 border-primary text-primary hover:bg-primary/10 w-full"><RefreshCw className="h-4 w-4 mr-2" />{t('adminModal.livePreview') || "Ver Cambios en Vivo"}</Button>
 
                 {!isEditingTemplate && !isEditingHome && (
                   <Button
                     variant="destructive"
                     onClick={() => handleDelete()}
                     disabled={isDeleting || isSaving}
-                    className="bg-red-900/20 text-red-500 border border-red-900/50 hover:bg-red-900/40 w-full sm:col-span-2 mt-2"
+                    className="col-span-1 sm:col-span-2 bg-red-900/20 text-red-500 border border-red-900/50 hover:bg-red-900/40 w-full mt-2"
                   >
                     {isDeleting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
                     {isDeleting ? "Eliminando..." : "Eliminar Cotización"}
@@ -1000,67 +1122,136 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
               </div>
             </div>
           </motion.div>
-        </motion.div>
+        </motion.div >
       )}
 
-      {showQR && currentThemeData && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[500] p-4" onClick={() => setShowQR(false)}>
-          <div className="bg-white p-8 rounded-xl flex flex-col items-center gap-6 shadow-2xl relative" onClick={e => e.stopPropagation()}>
-            <Button variant="ghost" size="icon" className="absolute top-2 right-2 text-gray-400 hover:text-black" onClick={() => setShowQR(false)}>
+      {/* BACKUP & RESTORE MODAL */}
+      {showBackupPanel && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[600] p-4" onClick={() => setShowBackupPanel(false)}>
+          <div className="bg-[#0f0f0f] border border-gray-800 p-8 rounded-xl w-full max-w-lg shadow-2xl relative space-y-6" onClick={e => e.stopPropagation()}>
+            <Button variant="ghost" size="icon" className="absolute top-2 right-2 text-gray-400 hover:text-white" onClick={() => setShowBackupPanel(false)}>
               <X size={20} />
             </Button>
 
-            <h3 className="text-2xl font-bold text-black flex items-center gap-2">
-              <QrCode className="text-primary" /> Código QR
-            </h3>
-
-            <div ref={qrRef} className="p-4 bg-white rounded-lg shadow-inner border border-gray-200">
-              <QRCodeCanvas
-                value={`https://www.solifood.site/cotizacion/${currentThemeData.slug}`}
-                size={256}
-                level="H"
-                includeMargin={true}
-              />
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 bg-blue-900/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-500/20">
+                <ShieldCheck className="w-6 h-6 text-blue-400" />
+              </div>
+              <h3 className="text-xl font-bold text-white">Centro de Recuperación</h3>
+              <p className="text-sm text-gray-400">Gestión de copias de seguridad y restauración del sistema.</p>
             </div>
 
-            <div className="text-center w-full space-y-4">
-              <div>
-                <p className="text-sm text-gray-600 font-bold">{currentThemeData.project}</p>
-                <p className="text-xs text-blue-600 truncate max-w-[250px] mx-auto">
-                  solifood.site/cotizacion/{currentThemeData.slug}
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <Button
-                  onClick={() => {
-                    const canvas = qrRef.current.querySelector('canvas');
-                    if (canvas) {
-                      generateQRAsPDF(canvas, {
-                        project: currentThemeData.project,
-                        client: currentThemeData.client,
-                        slug: currentThemeData.slug
-                      });
-                      toast({ title: "PDF Generado", description: "Buscando descarga..." });
-                    }
-                  }}
-                  className="w-full bg-primary text-white hover:bg-primary/90"
-                >
-                  <Download className="w-4 h-4 mr-2" /> Exportar PDF del QR
-                </Button>
+            <div className="grid gap-4">
+              {/* Generar Backup */}
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold text-blue-400 uppercase tracking-wider">Crear Respaldo</Label>
                 <Button
                   variant="outline"
-                  onClick={() => setShowQR(false)}
-                  className="w-full border-gray-300 text-gray-700 hover:bg-gray-50"
+                  onClick={handleGenerateControlPoint}
+                  disabled={isSaving}
+                  className="w-full bg-blue-950/20 border-blue-500/30 text-blue-300 hover:bg-blue-900/40 hover:text-blue-200 h-14"
                 >
-                  Cerrar
+                  {isSaving ? <Loader2 className="h-5 w-5 mr-3 animate-spin" /> : <ShieldCheck className="h-5 w-5 mr-3" />}
+                  <div className="text-left">
+                    <div className="font-semibold">Generar Punto de Control V2</div>
+                    <div className="text-[10px] opacity-70">Backup Total (DB + Storage + Config)</div>
+                  </div>
                 </Button>
               </div>
+
+              {/* Restaurar */}
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Restauración</Label>
+                <Button
+                  variant="outline"
+                  onClick={handleRestoreClick}
+                  disabled={isSaving}
+                  className="w-full border-dashed border-gray-700 text-gray-300 hover:bg-gray-800 h-14"
+                >
+                  <Upload className="h-5 w-5 mr-3" />
+                  <div className="text-left">
+                    <div className="font-semibold">Restaurar desde Archivo</div>
+                    <div className="text-[10px] opacity-70">Subir .ZIP para reconstruir proyecto</div>
+                  </div>
+                </Button>
+              </div>
+
+              <div className="h-px bg-gray-800 my-2" />
+
+              {/* Exportacion Simple */}
+              <Button
+                variant="ghost"
+                onClick={handleExportProjectZip}
+                className="w-full text-green-600 hover:text-green-500 hover:bg-green-900/10 justify-start"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Descargar JSON Simple (V1)
+              </Button>
             </div>
           </div>
         </div>
       )}
-    </AnimatePresence>
+
+      {
+        showQR && currentThemeData && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[500] p-4" onClick={() => setShowQR(false)}>
+            <div className="bg-white p-8 rounded-xl flex flex-col items-center gap-6 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+              <Button variant="ghost" size="icon" className="absolute top-2 right-2 text-gray-400 hover:text-black" onClick={() => setShowQR(false)}>
+                <X size={20} />
+              </Button>
+
+              <h3 className="text-2xl font-bold text-black flex items-center gap-2">
+                <QrCode className="text-primary" /> Código QR
+              </h3>
+
+              <div ref={qrRef} className="p-4 bg-white rounded-lg shadow-inner border border-gray-200">
+                <QRCodeCanvas
+                  value={`https://www.solifood.site/cotizacion/${currentThemeData.slug}`}
+                  size={256}
+                  level="H"
+                  includeMargin={true}
+                />
+              </div>
+
+              <div className="text-center w-full space-y-4">
+                <div>
+                  <p className="text-sm text-gray-600 font-bold">{currentThemeData.project}</p>
+                  <p className="text-xs text-blue-600 truncate max-w-[250px] mx-auto">
+                    solifood.site/cotizacion/{currentThemeData.slug}
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <Button
+                    onClick={() => {
+                      const canvas = qrRef.current.querySelector('canvas');
+                      if (canvas) {
+                        generateQRAsPDF(canvas, {
+                          project: currentThemeData.project,
+                          client: currentThemeData.client,
+                          slug: currentThemeData.slug
+                        });
+                        toast({ title: "PDF Generado", description: "Buscando descarga..." });
+                      }
+                    }}
+                    className="w-full bg-primary text-white hover:bg-primary/90"
+                  >
+                    <Download className="w-4 h-4 mr-2" /> Exportar PDF del QR
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowQR(false)}
+                    className="w-full border-gray-300 text-gray-700 hover:bg-gray-50"
+                  >
+                    Cerrar
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+    </AnimatePresence >
   );
 };
 
