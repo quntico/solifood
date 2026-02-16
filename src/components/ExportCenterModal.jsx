@@ -101,6 +101,34 @@ const ExportCenterModal = ({
         }
     };
 
+    const handleToggleMasterPlan = async () => {
+        setLoading(true);
+        try {
+            const currentConfig = quotationData.sections_config || {};
+            const newHiddenState = !currentConfig.hide_master_plan;
+
+            const updatedConfig = {
+                ...currentConfig,
+                hide_master_plan: newHiddenState
+            };
+
+            const { error } = await supabase
+                .from('quotations')
+                .update({ sections_config: updatedConfig })
+                .eq('id', quotationData.id);
+
+            if (error) throw error;
+
+            if (onUpdate) onUpdate(updatedConfig);
+            toast({ title: newHiddenState ? "Master Plan Oculto" : "Master Plan Visible", description: "Configuración actualizada." });
+        } catch (error) {
+            console.error("Error updating master plan visibility:", error);
+            toast({ title: "Error", description: "No se pudo actualizar la visibilidad.", variant: "destructive" });
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleMasterPlanExport = async () => {
         setIsExportingMP(true);
         try {
@@ -262,8 +290,8 @@ const ExportCenterModal = ({
         const file = e.target.files[0];
         if (!file || !editingItem) return;
 
-        if (file.size > 10 * 1024 * 1024) { // 10MB limit
-            toast({ title: "Archivo muy grande", description: "Máximo 10MB", variant: "destructive" });
+        if (file.size > 80 * 1024 * 1024) { // 80MB limit
+            toast({ title: "Archivo muy grande", description: "Máximo 80MB", variant: "destructive" });
             return;
         }
 
@@ -355,56 +383,40 @@ const ExportCenterModal = ({
                     </span>
 
                     <div className="flex items-center gap-2">
-                        {item.type === 'link' ? (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-primary hover:text-primary hover:bg-primary/10 gap-2 h-8"
-                                onClick={() => {
-                                    if (item.url) window.open(item.url, '_blank');
-                                    else toast({ title: "Sin enlace", description: "Este ítem no tiene un enlace configurado.", variant: "destructive" });
-                                }}
-                            >
-                                <ExternalLink className="w-4 h-4" />
-                                <span className="text-xs font-bold">ABRIR</span>
-                            </Button>
-                        ) : (
-                            <>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-white hover:text-primary hover:bg-white/5 gap-2 h-8"
-                                    onClick={() => {
-                                        if (item.url) window.open(item.url, '_blank');
-                                        else toast({ title: "Sin archivo", description: "No hay archivo para visualizar.", variant: "destructive" });
-                                    }}
-                                >
-                                    <Eye className="w-4 h-4" />
-                                    <span className="text-xs font-bold">VER</span>
-                                </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-primary hover:text-primary hover:bg-primary/10 gap-2 h-8"
-                                    onClick={() => {
-                                        if (item.url) {
-                                            const link = document.createElement('a');
-                                            link.href = item.url;
-                                            link.setAttribute('download', item.title || 'documento');
-                                            link.target = '_blank';
-                                            document.body.appendChild(link);
-                                            link.click();
-                                            document.body.removeChild(link);
-                                        } else {
-                                            toast({ title: "Sin archivo", description: "No hay archivo para descargar.", variant: "destructive" });
-                                        }
-                                    }}
-                                >
-                                    <Download className="w-4 h-4" />
-                                    <span className="text-xs font-bold">DESCARGAR</span>
-                                </Button>
-                            </>
-                        )}
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-white hover:text-primary hover:bg-white/5 gap-2 h-8"
+                            onClick={() => {
+                                if (item.url) window.open(item.url, '_blank');
+                                else toast({ title: "Sin archivo", description: "No hay recurso para visualizar.", variant: "destructive" });
+                            }}
+                        >
+                            {item.type === 'link' ? <ExternalLink className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            <span className="text-xs font-bold">{item.type === 'link' ? 'ABRIR' : 'VER'}</span>
+                        </Button>
+
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-primary hover:text-primary hover:bg-primary/10 gap-2 h-8"
+                            onClick={() => {
+                                if (item.url) {
+                                    const link = document.createElement('a');
+                                    link.href = item.url;
+                                    link.setAttribute('download', item.title || 'documento');
+                                    link.target = '_blank';
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                } else {
+                                    toast({ title: "Sin archivo", description: "No hay recurso para descargar.", variant: "destructive" });
+                                }
+                            }}
+                        >
+                            <Download className="w-4 h-4" />
+                            <span className="text-xs font-bold">DESCARGAR</span>
+                        </Button>
                     </div>
                 </div>
             </div>
@@ -446,23 +458,39 @@ const ExportCenterModal = ({
                                     </div>
                                 </div>
 
-                                <div className="group relative flex flex-col justify-between p-5 rounded-2xl border transition-all duration-300 bg-gray-900/60 border-gray-800 hover:border-gray-600 hover:bg-gray-800/60">
-                                    <div className="flex items-start gap-4">
-                                        <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-lg" style={{ backgroundColor: '#ef444420', color: '#ef4444' }}>
-                                            <FileText className="w-6 h-6" />
+                                {(!quotationData.sections_config?.hide_master_plan || isEditorMode) && (
+                                    <div className={`group relative flex flex-col justify-between p-5 rounded-2xl border transition-all duration-300 ${quotationData.sections_config?.hide_master_plan ? 'opacity-60 border-dashed border-gray-700 bg-gray-900/20' : 'bg-gray-900/60 border-gray-800 hover:border-gray-600 hover:bg-gray-800/60'}`}>
+
+                                        {/* Visibility Togggle (Editor Only) */}
+                                        {isEditorMode && (
+                                            <div className="absolute top-4 right-4 flex gap-2">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleToggleMasterPlan(); }}
+                                                    className="text-gray-500 hover:text-white transition-colors p-1"
+                                                    title={quotationData.sections_config?.hide_master_plan ? "Mostrar al cliente" : "Ocultar al cliente"}
+                                                >
+                                                    {!quotationData.sections_config?.hide_master_plan ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        <div className="flex items-start gap-4">
+                                            <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-lg" style={{ backgroundColor: '#ef444420', color: '#ef4444' }}>
+                                                <FileText className="w-6 h-6" />
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-white text-lg leading-tight group-hover:text-primary transition-colors">Master Plan</h3>
+                                                <p className="text-sm text-gray-400 mt-1">Concentrado técnico de equipos.</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h3 className="font-bold text-white text-lg leading-tight group-hover:text-primary transition-colors">Master Plan</h3>
-                                            <p className="text-sm text-gray-400 mt-1">Concentrado técnico de equipos.</p>
+                                        <div className="mt-6 pt-4 border-t border-gray-800 flex items-center justify-between">
+                                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">SISTEMA</span>
+                                            <Button variant="ghost" size="sm" className="text-primary hover:text-primary hover:bg-primary/10 gap-2 h-8" onClick={handleMasterPlanExport} disabled={isExportingMP}>
+                                                <Download className="w-4 h-4" /> <span className="text-xs font-bold">{isExportingMP ? 'GENERANDO...' : 'DESCARGAR'}</span>
+                                            </Button>
                                         </div>
                                     </div>
-                                    <div className="mt-6 pt-4 border-t border-gray-800 flex items-center justify-between">
-                                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">SISTEMA</span>
-                                        <Button variant="ghost" size="sm" className="text-primary hover:text-primary hover:bg-primary/10 gap-2 h-8" onClick={handleMasterPlanExport} disabled={isExportingMP}>
-                                            <Download className="w-4 h-4" /> <span className="text-xs font-bold">{isExportingMP ? 'GENERANDO...' : 'DESCARGAR'}</span>
-                                        </Button>
-                                    </div>
-                                </div>
+                                )}
 
                                 <div className="group relative flex flex-col justify-between p-5 rounded-2xl border transition-all duration-300 bg-gray-900/60 border-gray-800 hover:border-gray-600 hover:bg-gray-800/60">
                                     <div className="flex items-start gap-4">
