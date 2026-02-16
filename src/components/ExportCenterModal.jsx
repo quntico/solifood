@@ -349,23 +349,63 @@ const ExportCenterModal = ({
                 </div>
 
                 {/* Actions Area */}
-                <div className="mt-6 pt-4 border-t border-gray-800 flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                <div className="mt-6 pt-4 border-t border-gray-800 flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest shrink-0">
                         {item.type === 'link' ? 'ENLACE EXTERNO' : 'DOCUMENTO PDF'}
                     </span>
 
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-primary hover:text-primary hover:bg-primary/10 gap-2 h-8"
-                        onClick={() => {
-                            if (item.url) window.open(item.url, '_blank');
-                            else toast({ title: "Sin enlace", description: "Este ítem no tiene un enlace configurado.", variant: "destructive" });
-                        }}
-                    >
-                        {item.type === 'link' ? <ExternalLink className="w-4 h-4" /> : <Download className="w-4 h-4" />}
-                        <span className="text-xs font-bold">{item.type === 'link' ? 'ABRIR' : 'DESCARGAR'}</span>
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        {item.type === 'link' ? (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-primary hover:text-primary hover:bg-primary/10 gap-2 h-8"
+                                onClick={() => {
+                                    if (item.url) window.open(item.url, '_blank');
+                                    else toast({ title: "Sin enlace", description: "Este ítem no tiene un enlace configurado.", variant: "destructive" });
+                                }}
+                            >
+                                <ExternalLink className="w-4 h-4" />
+                                <span className="text-xs font-bold">ABRIR</span>
+                            </Button>
+                        ) : (
+                            <>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-white hover:text-primary hover:bg-white/5 gap-2 h-8"
+                                    onClick={() => {
+                                        if (item.url) window.open(item.url, '_blank');
+                                        else toast({ title: "Sin archivo", description: "No hay archivo para visualizar.", variant: "destructive" });
+                                    }}
+                                >
+                                    <Eye className="w-4 h-4" />
+                                    <span className="text-xs font-bold">VER</span>
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-primary hover:text-primary hover:bg-primary/10 gap-2 h-8"
+                                    onClick={() => {
+                                        if (item.url) {
+                                            const link = document.createElement('a');
+                                            link.href = item.url;
+                                            link.setAttribute('download', item.title || 'documento');
+                                            link.target = '_blank';
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            document.body.removeChild(link);
+                                        } else {
+                                            toast({ title: "Sin archivo", description: "No hay archivo para descargar.", variant: "destructive" });
+                                        }
+                                    }}
+                                >
+                                    <Download className="w-4 h-4" />
+                                    <span className="text-xs font-bold">DESCARGAR</span>
+                                </Button>
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
         );
@@ -434,11 +474,16 @@ const ExportCenterModal = ({
                                             <p className="text-sm text-gray-400 mt-1">Documento original oficial.</p>
                                         </div>
                                     </div>
-                                    <div className="mt-6 pt-4 border-t border-gray-800 flex items-center justify-between">
-                                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">SISTEMA</span>
-                                        <Button variant="ghost" size="sm" className="text-primary hover:text-primary hover:bg-primary/10 gap-2 h-8" onClick={() => window.dispatchEvent(new CustomEvent('SOLIFOOD_EXPORT_PDF_DOC'))}>
-                                            <Download className="w-4 h-4" /> <span className="text-xs font-bold">DESCARGAR</span>
-                                        </Button>
+                                    <div className="mt-6 pt-4 border-t border-gray-800 flex items-center justify-between gap-2">
+                                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest shrink-0">SISTEMA</span>
+                                        <div className="flex items-center gap-2">
+                                            <Button variant="ghost" size="sm" className="text-white hover:text-primary hover:bg-white/5 gap-2 h-8" onClick={() => window.dispatchEvent(new CustomEvent('SOLIFOOD_EXPORT_PDF_DOC', { detail: { action: 'view' } }))}>
+                                                <Eye className="w-4 h-4" /> <span className="text-xs font-bold">VER</span>
+                                            </Button>
+                                            <Button variant="ghost" size="sm" className="text-primary hover:text-primary hover:bg-primary/10 gap-2 h-8" onClick={() => window.dispatchEvent(new CustomEvent('SOLIFOOD_EXPORT_PDF_DOC', { detail: { action: 'download' } }))}>
+                                                <Download className="w-4 h-4" /> <span className="text-xs font-bold">DESCARGAR</span>
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
 
