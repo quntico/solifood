@@ -46,7 +46,7 @@ const Header = ({
   const [isExportingMP, setIsExportingMP] = useState(false);
   const [isExportCenterOpen, setIsExportCenterOpen] = useState(false);
 
-
+  const handleMasterPlanExport = async () => {
     // 2. Extract from THIS project (Try embedded first, then cloud)
     setIsExportingMP(true);
     try {
