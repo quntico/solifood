@@ -77,17 +77,19 @@ const Header = ({
         config = embeddedMP;
       }
 
-      // STEP B: If not embedded, fetch specific cloud record (Universal Slug Resolver Ver 5.62)
+      // STEP B: If not embedded, fetch specific cloud record (Universal Slug Resolver Ver 5.65)
       if (!config) {
+        // [SYNC] Priority list matching MasterPlan.jsx instantiation in QuotationViewer
         const slugsToTry = [
-          mpSlug, // mp-barra-manicero
-          `mp-default-home_sanborns_${currentSlug}`, // mp-default-home_sanborns_barra-manicero
-          'master-plan-concentrado',
-          'master-plan'
+          `mp-${quotationData.theme_key}`, // ID Único (v5.65 Priority)
+          `mp-${quotationData.slug}`,      // Slug personalizado
+          `mp-default-home_sanborns_${currentSlug}`, // Compatibilidad Legacy
         ];
 
         for (const slug of slugsToTry) {
-          console.log(`[Header] Trying cloud fetch for: ${slug}`);
+          if (!slug || slug === 'mp-undefined' || slug === 'mp-null') continue;
+
+          console.log(`[Header] Trying cloud fetch for specific MP: ${slug}`);
           const { data: cloudData } = await supabase
             .from('quotations')
             .select('sections_config')
@@ -239,7 +241,7 @@ const Header = ({
                   className="absolute -bottom-1 -right-4 translate-x-full hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/80 border border-white/20 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-sm cursor-pointer select-none hover:border-primary/50 transition-colors"
                 >
                   <div className="w-2.5 h-2.5 rounded-full bg-[#39ff14] shadow-[0_0_12px_#39ff14] animate-pulse" />
-                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 5.63</span>
+                  <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full border border-primary/20 tracking-widest">VER 7.00</span>
                 </div>
               </div>
             )}

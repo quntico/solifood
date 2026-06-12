@@ -84,11 +84,53 @@ const ExportTemplateEditor = ({ isOpen, onClose, sections, grandTotals, clientNa
         const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
         const { headerBg, headerText, titleText, logoPos, colWidths, fontSize, rowHeight, imgSize, metaPos, headerBox } = settings;
 
-        const logoImg = new Image();
-        logoImg.src = logoUrl;
-        logoImg.crossOrigin = "Anonymous";
+        const loadImageAsDataURL = (url, format = 'JPEG') => {
+            return new Promise((resolve) => {
+                if (!url) return resolve(null);
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                img.onload = () => {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.naturalWidth || img.width;
+                        canvas.height = img.naturalHeight || img.height;
+                        const ctx = canvas.getContext('2d');
+                        if (format === 'JPEG') {
+                            ctx.fillStyle = '#ffffff';
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        }
+                        ctx.drawImage(img, 0, 0);
+                        const mimeType = format === 'PNG' ? 'image/png' : 'image/jpeg';
+                        const dataUrl = canvas.toDataURL(mimeType, format === 'PNG' ? undefined : 0.85);
+                        resolve(dataUrl);
+                    } catch (e) {
+                        console.error("Canvas convert error", e);
+                        resolve(null);
+                    }
+                };
+                img.onerror = () => resolve(null);
+                img.src = url;
+            });
+        };
 
-        const start = () => {
+        const itemUrls = [];
+        sections.forEach(s => {
+            const activeItems = s.items.filter(it => it.activo);
+            activeItems.forEach(it => {
+                if (it.media_url && it.media_type !== 'video') {
+                    itemUrls.push(it.media_url);
+                }
+            });
+        });
+
+        const start = async () => {
+            const [loadedLogo, ...loadedItemImages] = await Promise.all([
+                loadImageAsDataURL(logoUrl || "/solifood-logo.png", 'PNG'),
+                ...itemUrls.map(u => loadImageAsDataURL(u, 'JPEG'))
+            ]);
+
+            const imageMap = new Map(itemUrls.map((url, idx) => [url, loadedItemImages[idx]]));
+
             const topMargin = 8;
 
             const drawHeader = () => {
@@ -115,18 +157,26 @@ const ExportTemplateEditor = ({ isOpen, onClose, sections, grandTotals, clientNa
                 doc.text(new Date().toLocaleDateString('es-MX'), metaPos.x + 23, metaPos.y + topMargin + 10);
 
                 try {
-                    doc.addImage(logoImg, 'PNG', logoPos.x, logoPos.y + topMargin, logoPos.width, logoPos.height, undefined, 'FAST');
+                    if (loadedLogo) {
+                        doc.addImage(loadedLogo, 'PNG', logoPos.x, logoPos.y + topMargin, logoPos.width, logoPos.height, undefined, 'FAST');
+                    }
                 } catch (e) { console.error("Logo PDF Draw Error", e); }
             };
 
-            let tableData = [];
             let globalIdx = 1;
+            let firstSectionDrawn = false;
 
             sections.forEach((s, sIdx) => {
                 const activeItems = s.items.filter(it => it.activo);
                 if (activeItems.length === 0) return;
 
-                tableData.push([
+                if (firstSectionDrawn) {
+                    doc.addPage();
+                }
+                firstSectionDrawn = true;
+
+                const sectionTableData = [];
+                sectionTableData.push([
                     { content: `MÓDULO ${sIdx + 1}: ${s.titulo}`, colSpan: 7, styles: { fillColor: [120, 120, 120], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center', minCellHeight: 10 } }
                 ]);
 
@@ -134,80 +184,143 @@ const ExportTemplateEditor = ({ isOpen, onClose, sections, grandTotals, clientNa
                 activeItems.forEach(it => {
                     const r = calcItem(it);
                     modSum += r.totalVenta;
-                    tableData.push([
+                    sectionTableData.push([
                         { content: globalIdx++, styles: { textColor: settings.primaryColor, fontStyle: 'bold' } },
                         it.equipo.toUpperCase(),
-                        it.descripcion.substring(0, 350),
-                        { content: "", image: it.media_url && it.media_type !== 'video' ? it.media_url : null },
+                        it.descripcion,
+                        { content: "", image: it.media_url && it.media_type !== 'video' ? imageMap.get(it.media_url) : null },
                         it.qty,
                         money(r.ventaUnitFinal),
                         money(r.totalVenta)
                     ]);
                 });
 
-                tableData.push([
-                    { content: `SUBTOTAL MÓDULO ${sIdx + 1}`, colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', fontSize: fontSize + 2, textColor: [60, 60, 60] } },
-                    { content: money(modSum), styles: { halign: 'right', fontStyle: 'bold', fontSize: fontSize + 2, textColor: [60, 60, 60] } }
+                sectionTableData.push([
+                    { content: `SUBTOTAL MÓDULO ${sIdx + 1}`, colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fontSize: fontSize + 2, textColor: [60, 60, 60] } },
+                    { content: money(modSum), colSpan: 2, styles: { halign: 'right', fontStyle: 'bold', fontSize: fontSize + 2, textColor: [60, 60, 60] } }
+                ]);
+
+                doc.autoTable({
+                    startY: 40,
+                    head: [['ITEM', 'EQUIPO', 'DESCRIPCIÓN', 'FOTO', 'QTY', 'UNITARIO', 'TOTAL']],
+                    body: sectionTableData,
+                    theme: 'plain',
+                    headStyles: { fillColor: settings.primaryColor, textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', minCellHeight: 12 },
+                    styles: { fontSize, cellPadding: 2, valign: 'middle', lineWidth: 0.1, minCellHeight: rowHeight },
+                    columnStyles: {
+                        0: { halign: 'center', cellWidth: colWidths.item },
+                        1: { fontStyle: 'bold', cellWidth: colWidths.equipo },
+                        2: { cellWidth: colWidths.desc, cellPadding: { top: 3, right: 3, bottom: 6, left: 3 } },
+                        3: { halign: 'center', cellWidth: colWidths.foto },
+                        4: { halign: 'center', cellWidth: colWidths.qty },
+                        5: { halign: 'right', cellWidth: colWidths.unit },
+                        6: { halign: 'right', cellWidth: colWidths.total }
+                    },
+                    rowPageBreak: 'avoid',
+                    margin: { top: 40, left: 15, right: 15, bottom: 20 },
+                    didDrawPage: (data) => {
+                        drawHeader();
+                        doc.setFontSize(7);
+                        doc.setTextColor(180, 180, 180);
+                        doc.text(`Página ${data.pageNumber} | www.solifood.mx`, 282, 202, { align: 'right' });
+                    },
+                    didDrawCell: (data) => {
+                        if (data.section === 'body' && data.column.index === 3) {
+                            const img = sectionTableData[data.row.index]?.[3]?.image;
+                            if (img) try { doc.addImage(img, 'JPEG', data.cell.x + (data.cell.width - imgSize) / 2, data.cell.y + 2, imgSize, imgSize, undefined, 'FAST'); } catch (e) { }
+                        }
+                    }
+                });
+            });
+
+            // Add a new page for the summary
+            doc.addPage();
+            drawHeader();
+            doc.setFontSize(16);
+            doc.setTextColor(0, 0, 0);
+            doc.setFont("helvetica", "bold");
+            doc.text("RESUMEN DE INVERSIÓN TOTAL", 15, 45);
+            doc.setDrawColor(settings.primaryColor);
+            doc.setLineWidth(1.5);
+            doc.line(15, 48, 110, 48);
+
+            const summaryData = [];
+            let grandTotalKw = 0;
+            sections.forEach((s, sIdx) => {
+                const activeItems = s.items.filter(it => it.activo);
+                if (activeItems.length === 0) return;
+
+                let modSum = 0;
+                let modKw = 0;
+                activeItems.forEach(it => {
+                    const r = calcItem(it);
+                    modSum += r.totalVenta;
+                    modKw += parseKw(it.kw) * (it.qty || 1);
+                });
+
+                grandTotalKw += modKw;
+
+                summaryData.push([
+                    { content: `MÓDULO ${sIdx + 1}: ${s.titulo}`, styles: { fontStyle: 'bold' } },
+                    { content: `${money(modSum)} ${isMXN ? 'MXN' : 'USD'}`, styles: { halign: 'right', fontStyle: 'bold' } }
                 ]);
             });
 
             doc.autoTable({
-                startY: 40,
-                head: [['ITEM', 'EQUIPO', 'DESCRIPCIÓN', 'FOTO', 'QTY', 'UNITARIO', 'TOTAL']],
-                body: tableData,
-                theme: 'plain',
-                headStyles: { fillColor: settings.primaryColor, textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', minCellHeight: 12 },
-                styles: { fontSize, cellPadding: 2, valign: 'middle', lineWidth: 0.1, minCellHeight: rowHeight },
+                startY: 52,
+                head: [['MÓDULO DEL PROYECTO', 'MONTO']],
+                body: summaryData,
+                theme: 'grid',
+                headStyles: { fillColor: settings.primaryColor, textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', minCellHeight: 9, fontSize: 10, lineColor: settings.primaryColor, lineWidth: 0.1 },
+                styles: { fontSize: 9, cellPadding: 2.5, valign: 'middle', textColor: [40, 40, 40], lineColor: [220, 220, 220], lineWidth: 0.1, minCellHeight: 8 },
+                alternateRowStyles: { fillColor: [248, 248, 248] },
                 columnStyles: {
-                    0: { halign: 'center', cellWidth: colWidths.item },
-                    1: { fontStyle: 'bold', cellWidth: colWidths.equipo },
-                    2: { cellWidth: colWidths.desc },
-                    3: { halign: 'center', cellWidth: colWidths.foto },
-                    4: { halign: 'center', cellWidth: colWidths.qty },
-                    5: { halign: 'right', cellWidth: colWidths.unit },
-                    6: { halign: 'right', cellWidth: colWidths.total }
+                    0: { cellWidth: 197 },
+                    1: { cellWidth: 70, halign: 'right' }
                 },
-                rowPageBreak: 'avoid',
                 margin: { top: 40, left: 15, right: 15, bottom: 20 },
                 didDrawPage: (data) => {
                     drawHeader();
                     doc.setFontSize(7);
                     doc.setTextColor(180, 180, 180);
-                    doc.text(`Página ${data.pageNumber} | www.solifood.mx`, 282, 202, { align: 'right' });
-                },
-                didDrawCell: (data) => {
-                    if (data.section === 'body' && data.column.index === 3) {
-                        const img = tableData[data.row.index]?.[3]?.image;
-                        if (img) try { doc.addImage(img, 'JPEG', data.cell.x + (data.cell.width - imgSize) / 2, data.cell.y + 2, imgSize, imgSize, undefined, 'FAST'); } catch (e) { }
-                    }
+                    doc.text(`Resumen | Página ${data.pageNumber} | www.solifood.mx`, 282, 202, { align: 'right' });
                 }
             });
 
-            // TOTAL GENERAL ALIGNED TO THE LAST COLUMN (WIDTH OF THE TABLE)
-            const finalY = doc.lastAutoTable.finalY + 8;
-            if (finalY < 185) {
-                const totalBoxWidth = settings.colWidths.total + settings.colWidths.unit + 30; // Extend across last columns
-                const tableRightPos = 282; // Matches page margin
+            let finalY = doc.lastAutoTable.finalY + 6;
+            if (finalY > 180) {
+                doc.addPage();
+                drawHeader();
+                finalY = 40;
+            }
 
-                doc.setFillColor(0, 0, 0);
-                doc.rect(tableRightPos - totalBoxWidth, finalY, totalBoxWidth, 14, 'F');
+            const totalBoxWidth = 180;
+            const tableRightPos = 282;
+            const boxHeight = grandTotalKw > 0 ? 24 : 14;
+            doc.setFillColor(89, 89, 89);
+            doc.rect(tableRightPos - totalBoxWidth, finalY, totalBoxWidth, boxHeight, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(10);
+            doc.text(`TOTAL DEL PROYECTO (${isMXN ? 'MXN' : 'USD'})`, tableRightPos - totalBoxWidth + 5, finalY + 6);
+            doc.setFontSize(7);
+            doc.setTextColor(220, 220, 220);
+            doc.text("* precios más 16% de I.V.A.", tableRightPos - totalBoxWidth + 5, finalY + 11);
 
-                doc.setTextColor(255, 255, 255);
-                doc.setFontSize(12);
-                doc.text("TOTAL GENERAL", tableRightPos - totalBoxWidth + 5, finalY + 9);
+            doc.setFontSize(18);
+            doc.setTextColor(settings.primaryColor);
+            doc.text(`${money(grandTotals.totalVenta)} ${isMXN ? 'MXN' : 'USD'}`, tableRightPos - 4, finalY + 10, { align: 'right' });
 
-                doc.setFontSize(16);
-                doc.text(money(grandTotals.totalVenta), tableRightPos - 5, finalY + 9, { align: 'right' });
+            if (grandTotalKw > 0) {
+                doc.setFontSize(7);
+                doc.setTextColor(200, 200, 200);
+                doc.text(`CAPACIDAD INSTALADA: ${grandTotalKw.toFixed(2)} kW`, tableRightPos - 4, finalY + 17, { align: 'right' });
+                doc.text(`CONSUMO NOMINAL: ${(grandTotalKw * 0.75).toFixed(2)} kW`, tableRightPos - 4, finalY + 21, { align: 'right' });
             }
 
             doc.save(`SOLIFOOD_MP_${editableProject.replace(/\s+/g, '_')}.pdf`);
         };
 
-        if (logoImg.complete) start();
-        else {
-            logoImg.onload = start;
-            logoImg.onerror = () => start();
-        }
+        start();
     };
 
     if (!isOpen) return null;

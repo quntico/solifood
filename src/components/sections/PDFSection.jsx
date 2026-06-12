@@ -50,7 +50,7 @@ const AdminLoginDialog = ({ isOpen, onClose, onLogin }) => {
   );
 };
 
-const AddQuotationDialog = ({ isOpen, onClose, onAdd, activeTheme }) => {
+const AddQuotationDialog = ({ isOpen, onClose, onAdd, activeTheme, activeBucket }) => {
   const { toast } = useToast();
   const [name, setName] = useState('');
   const [file, setFile] = useState(null);
@@ -89,8 +89,10 @@ const AddQuotationDialog = ({ isOpen, onClose, onAdd, activeTheme }) => {
 
       if (dbError) throw dbError;
 
-      // 2. Try uploading to potential buckets
-      const potentialBuckets = ['quotation-pdfs', 'quotation-files', 'public', 'storage', 'logos-bucket'];
+      // 2. Try uploading to potential buckets - Prioritize activeBucket
+      const otherBuckets = ['quotation-pdfs', 'quotation-files', 'public', 'storage', 'logos-bucket'].filter(b => b !== activeBucket);
+      const potentialBuckets = activeBucket ? [activeBucket, ...otherBuckets] : otherBuckets;
+
       let uploadSuccess = false;
       let usedBucket = '';
       let filePath = '';
@@ -98,6 +100,7 @@ const AddQuotationDialog = ({ isOpen, onClose, onAdd, activeTheme }) => {
 
       for (const bucket of potentialBuckets) {
         try {
+          console.log(`Intentando subir a bucket: ${bucket}`);
           filePath = `${activeTheme}/${dbData.id}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
           const { error: uploadError } = await supabase.storage
             .from(bucket)
@@ -203,6 +206,7 @@ const PDFSection = ({ isEditorMode, setIsEditorMode, activeTheme, sectionData })
   const [activeBucket, setActiveBucket] = useState('quotation-pdfs'); // Default
   const [pdfUrl, setPdfUrl] = useState(null);
   const [downloadUrl, setDownloadUrl] = useState(null);
+  const [isFetchingPdf, setIsFetchingPdf] = useState(false);
 
   useEffect(() => {
     const initBucket = async () => {
@@ -287,7 +291,6 @@ const PDFSection = ({ isEditorMode, setIsEditorMode, activeTheme, sectionData })
     }
 
     try {
-      let urlToFetch = null;
       let originalSignedUrl = null;
 
       const { data, error } = await supabase.storage
@@ -295,22 +298,14 @@ const PDFSection = ({ isEditorMode, setIsEditorMode, activeTheme, sectionData })
         .createSignedUrl(pathToUse, 3600);
 
       if (data?.signedUrl) {
-        urlToFetch = data.signedUrl;
         originalSignedUrl = data.signedUrl;
       } else {
         const { data: publicData } = supabase.storage.from(bucketToUse).getPublicUrl(pathToUse);
-        urlToFetch = publicData.publicUrl;
         originalSignedUrl = publicData.publicUrl;
       }
 
-      const response = await fetch(urlToFetch);
-      if (!response.ok) throw new Error('Network response was not ok');
-
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-
       const cacheItem = {
-        pdfUrl: objectUrl,
+        pdfUrl: originalSignedUrl, // Use direct URL instead of Blob
         downloadUrl: originalSignedUrl
       };
 
@@ -352,12 +347,16 @@ const PDFSection = ({ isEditorMode, setIsEditorMode, activeTheme, sectionData })
 
       console.log(`[PDF Cache] Miss for ${selectedQuotation.name}, fetching...`);
       setPdfUrl(null);
+      setIsFetchingPdf(true);
 
       const cached = await loadPdfToCache(selectedQuotation);
 
-      if (isMounted && cached) {
-        setPdfUrl(cached.pdfUrl);
-        setDownloadUrl(cached.downloadUrl);
+      if (isMounted) {
+        if (cached) {
+          setPdfUrl(cached.pdfUrl);
+          setDownloadUrl(cached.downloadUrl);
+        }
+        setIsFetchingPdf(false);
       }
     };
 
@@ -366,27 +365,10 @@ const PDFSection = ({ isEditorMode, setIsEditorMode, activeTheme, sectionData })
     return () => { isMounted = false; };
   }, [selectedQuotation, loadPdfToCache]);
 
-  // Preloader Effect: Load others in background
+  // Preloader Effect: Removed as it causes memory exhaustion and freezes for large files
   useEffect(() => {
-    const preloadOthers = async () => {
-      if (quotations.length <= 1) return;
-
-      for (const q of quotations) {
-        if (selectedQuotation && q.id === selectedQuotation.id) continue;
-        if (pdfCache.current[q.id]) continue;
-
-        console.log(`[PDF Preloader] Fetching ${q.name}...`);
-        await loadPdfToCache(q);
-        await new Promise(r => setTimeout(r, 100)); // Small delay to yield
-      }
-    };
-
-    const timer = setTimeout(() => {
-      preloadOthers();
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [quotations, selectedQuotation, loadPdfToCache]);
+    // Background preloading is disabled in v5.71 to ensure application stability
+  }, []);
 
 
   const handleAdminToggle = () => {
@@ -416,7 +398,7 @@ const PDFSection = ({ isEditorMode, setIsEditorMode, activeTheme, sectionData })
       const knownBuckets = ['quotation-pdfs', 'quotation-files', 'public', 'storage', 'logos-bucket'];
 
       let bucketToUse = activeBucket || 'quotation-pdfs';
-      let pathToUse = filePath;
+      let pathToUse = url;
 
       if (knownBuckets.includes(potentialBucket)) {
         bucketToUse = potentialBucket;
@@ -425,7 +407,8 @@ const PDFSection = ({ isEditorMode, setIsEditorMode, activeTheme, sectionData })
 
       const { error: fileError } = await supabase.storage.from(bucketToUse).remove([pathToUse]);
       if (fileError) {
-        toast({ title: "Error de Almacenamiento", description: `No se pudo eliminar el archivo: ${fileError.message}`, variant: "destructive" });
+        console.error("Error deleting file from storage:", fileError);
+        // We continue even if storage delete fails, to allow cleaning up DB if user insists
       }
     }
 
@@ -459,7 +442,13 @@ const PDFSection = ({ isEditorMode, setIsEditorMode, activeTheme, sectionData })
   return (
     <div className="py-4 sm:py-8 w-full h-full min-h-screen flex flex-col">
       <AdminLoginDialog isOpen={isLoginDialogOpen} onClose={() => setIsLoginDialogOpen(false)} onLogin={handleLoginSuccess} />
-      <AddQuotationDialog isOpen={isAddDialogOpen} onClose={() => setIsAddDialogOpen(false)} onAdd={handleAddSuccess} activeTheme={activeTheme} />
+      <AddQuotationDialog
+        isOpen={isAddDialogOpen}
+        onClose={() => setIsAddDialogOpen(false)}
+        onAdd={handleAddSuccess}
+        activeTheme={activeTheme}
+        activeBucket={activeBucket}
+      />
 
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-[95%] mx-auto w-full flex-grow flex flex-col">
         <div className="flex flex-col sm:flex-row justify-between items-start mb-4 gap-4 sm:gap-0">
@@ -523,7 +512,7 @@ const PDFSection = ({ isEditorMode, setIsEditorMode, activeTheme, sectionData })
                       )}
 
                       {isEditorMode && (
-                        <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-1 flex-shrink-0 transition-opacity">
                           {editingQuotation === q.id ? (
                             <Button size="icon" variant="ghost" onClick={() => setEditingQuotation(null)}><X className="w-4 h-4 text-gray-500" /></Button>
                           ) : (
@@ -569,11 +558,18 @@ const PDFSection = ({ isEditorMode, setIsEditorMode, activeTheme, sectionData })
                   </div>
                 </div>
                 <div className="flex-grow overflow-hidden relative bg-white">
-                  <iframe
-                    src={pdfUrl}
-                    className="w-full h-full absolute inset-0"
-                    title={selectedQuotation.name}
-                  />
+                  {isFetchingPdf ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/10 gap-4">
+                      <Loader2 className="w-10 h-10 animate-spin text-primary" />
+                      <p className="text-gray-600 font-medium animate-pulse">Preparando documento...</p>
+                    </div>
+                  ) : (
+                    <iframe
+                      src={pdfUrl}
+                      className="w-full h-full absolute inset-0"
+                      title={selectedQuotation.name}
+                    />
+                  )}
                 </div>
               </div>
             ) : (

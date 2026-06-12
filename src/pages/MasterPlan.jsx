@@ -3,11 +3,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import { PDFDocument } from 'pdf-lib';
 import ExportTemplateEditor from '../components/ExportTemplateEditor';
 import { supabase } from "@/lib/customSupabaseClient";
 import PasswordPrompt from '@/components/PasswordPrompt';
 import { getActiveBucket } from "@/lib/bucketResolver";
-import { Camera, Video, Image as ImageIcon, X, Check, Maximize2, Upload, Loader2, Play, Lock, Unlock, Settings, Edit, Shield, AlignLeft, AlignCenter, AlignRight, AlignJustify, Calendar, User, Briefcase, ChevronRight, ChevronDown, ChevronsDown, ChevronsRight, FileSpreadsheet, Download, Plus, Minus } from "lucide-react";
+import { Camera, Video, Image as ImageIcon, X, Check, Maximize2, Upload, Loader2, Play, Lock, Unlock, Settings, Edit, Shield, AlignLeft, AlignCenter, AlignRight, AlignJustify, Calendar, User, Briefcase, ChevronRight, ChevronDown, ChevronsDown, ChevronsRight, FileSpreadsheet, Download, Plus, Minus, FileText, Power, Search, ImagePlus, ArrowUp, ArrowDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Dialog,
@@ -31,6 +32,14 @@ const STICKY_OFFSETS = {
 const n = (v) => {
     const x = Number(v);
     return Number.isFinite(x) ? x : 0;
+};
+
+const parseKw = (v) => {
+    if (!v) return 0;
+    if (typeof v === 'number') return v;
+    const str = String(v).replace(/[^0-9.]/g, '');
+    const num = Number(str);
+    return Number.isFinite(num) ? num : 0;
 };
 
 const money = (v) =>
@@ -192,6 +201,7 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
     const [mpTitle, setMpTitle] = useState(() => localStorage.getItem("solifood_mp_title") || "MASTER PLAN");
     const [mpSubTitle, setMpSubTitle] = useState(() => localStorage.getItem("solifood_mp_subtitle") || "INDUSTRIAL CENTER");
     const [heroVideoUrl, setHeroVideoUrl] = useState(() => localStorage.getItem("solifood_mp_hero_video") || "");
+    const [coverUrl, setCoverUrl] = useState(() => localStorage.getItem("solifood_mp_cover") || "");
     const [isHeroVideoActive, setIsHeroVideoActive] = useState(false);
     const [heroVideoIsIntegrated, setHeroVideoIsIntegrated] = useState(() => localStorage.getItem("solifood_mp_hero_integrated") === "true");
     const [heroVideoScale, setHeroVideoScale] = useState(() => Number(localStorage.getItem("solifood_mp_hero_scale")) || 100);
@@ -226,8 +236,50 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
         } catch { return null; }
     });
     const [isFooterHovered, setIsFooterHovered] = useState(false);
+    const [exportConfig, setExportConfig] = useState({
+        isOpen: false,
+        type: null,
+        module: null,
+        fileName: '',
+        currency: 'USD',
+        tc: 17.50
+    });
+
+    const triggerExport = (type, module = null) => {
+        let defaultFileName = projectName;
+        if (type === 'pdf_nophotos') defaultFileName = `DETALLE_MODULOS_${projectName}`;
+        if (type === 'excel_active') defaultFileName = `LISTADO_EQUIPOS_${projectName}`;
+        if (type === 'excel_master') defaultFileName = `MASTER_PLAN_${projectName}`;
+        if (module) defaultFileName = `MODULO_${module.titulo.substring(0, 30)}`;
+
+        setExportConfig({
+            isOpen: true,
+            type,
+            module,
+            fileName: defaultFileName.replace(/\s+/g, '_').toUpperCase(),
+            currency: 'USD',
+            tc: 17.50
+        });
+    };
+
+    const confirmExport = () => {
+        const conf = exportConfig;
+        setExportConfig({ ...exportConfig, isOpen: false });
+        setTimeout(() => {
+            if (conf.type === 'pdf') handleExportPDF(conf);
+            if (conf.type === 'pdf_nophotos') handleExportPDFNoPhotos(conf);
+            if (conf.type === 'pdf_module') handleExportSingleModulePDF(conf.module, conf);
+            if (conf.type === 'excel_module') handleExportSectionExcel(conf.module, conf);
+            if (conf.type === 'excel_active') handleExportActiveExcel(conf);
+            if (conf.type === 'excel_master') handleMasterExportExcel(conf);
+        }, 100);
+    };
+
+
+    const [searchQuery, setSearchQuery] = useState("");
 
     const logoRef = useRef(null);
+    const coverRef = useRef(null);
     const heroVideoInputRef = useRef(null);
     const fileInputRef = useRef(null);
     const tableRefs = useRef({});
@@ -379,6 +431,7 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
 
                 const cloudVideoUrl = finalData.video_url || config.heroVideoUrl;
                 if (cloudVideoUrl) setHeroVideoUrl(cloudVideoUrl);
+                if (config.coverUrl) setCoverUrl(config.coverUrl);
 
                 if (config.heroVideoIsIntegrated !== undefined) setHeroVideoIsIntegrated(config.heroVideoIsIntegrated);
                 if (config.heroVideoScale) setHeroVideoScale(config.heroVideoScale);
@@ -546,6 +599,7 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
             heroVideoScale, heroVideoBorderRadius,
             tableFontSize,
             logoUrl: logoUrl, // Institutional logo remains same
+            coverUrl,
             sections,
             pdfSettings: {
                 ...newSettings,
@@ -574,6 +628,9 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
 
     const updateSectionTitle = (id, val) => {
         setSections(prev => prev.map(s => s.id === id ? { ...s, titulo: val.toUpperCase() } : s));
+    };
+    const updateSectionSubtitle = (id, val) => {
+        setSections(prev => prev.map(s => s.id === id ? { ...s, subtitulo: val } : s));
     };
     const updateSection = (id, patch) => {
         setSections(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
@@ -641,10 +698,9 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
 
             setLogoUrl(publicUrl);
 
-            // Pass the literal updated config to avoid stale state in saveToCloud
             const updatedConfig = {
                 clientName, projectName, projectDesc, projectDate,
-                mpTitle, mpSubTitle, logoUrl: publicUrl, heroVideoUrl,
+                mpTitle, mpSubTitle, logoUrl: publicUrl, heroVideoUrl, coverUrl,
                 heroVideoIsIntegrated, heroVideoScale, heroVideoBorderRadius,
                 tableFontSize, sections: sections // Explicitly ensuring sections are included
             };
@@ -654,6 +710,34 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
         } catch (error) {
             console.error(error);
             toast({ title: "Error", description: "No se pudo subir o guardar el logotipo.", variant: "destructive" });
+        } finally { setUploadingId(null); }
+    };
+
+    const handleCoverUpload = async (file) => {
+        if (!file) return;
+        setUploadingId('cover');
+        try {
+            const bucket = await getActiveBucket();
+            const fileName = `cover_${Date.now()}.${file.name.split('.').pop()}`;
+            const filePath = `masterplan/${fileName}`;
+            const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file);
+            if (uploadError) throw uploadError;
+            const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filePath);
+
+            setCoverUrl(publicUrl);
+
+            const updatedConfig = {
+                clientName, projectName, projectDesc, projectDate,
+                mpTitle, mpSubTitle, logoUrl, heroVideoUrl, coverUrl: publicUrl,
+                heroVideoIsIntegrated, heroVideoScale, heroVideoBorderRadius,
+                tableFontSize, sections: sections
+            };
+            await saveToCloud(updatedConfig);
+
+            toast({ title: "Portada actualizada", description: "La portada se ha subido y guardado correctamente." });
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error", description: "No se pudo subir la portada.", variant: "destructive" });
         } finally { setUploadingId(null); }
     };
 
@@ -830,12 +914,46 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
         const costoUnit = n(it.costoUSD);
         const qty = n(it.qty);
         const util = n(it.utilidad);
+        const kwUnit = n(it.kw);
         const ventaUnitFinal = costoUnit * (1 + (util / 100));
-        return { costoUnit, ventaUnitFinal, totalCosto: costoUnit * qty, totalVenta: ventaUnitFinal * qty };
+        return { costoUnit, ventaUnitFinal, totalCosto: costoUnit * qty, totalVenta: ventaUnitFinal * qty, kwUnit, totalKw: kwUnit * qty };
+    };
+
+    const renumberSections = (sectionsArr) => {
+        let activeModIdx = 1;
+        return sectionsArr.map(s => {
+            if (s.activo === false) {
+                return { ...s, displayIndex: "-", items: s.items.map(it => ({ ...it, codigo: "-" })) };
+            }
+            let activeItemIdx = 1;
+            let hasActiveItems = false;
+            const newItems = s.items.map(it => {
+                if (it.activo) {
+                    hasActiveItems = true;
+                    const code = `${activeModIdx}.${activeItemIdx}`;
+                    activeItemIdx++;
+                    return { ...it, codigo: code };
+                }
+                return { ...it, codigo: "-" };
+            });
+            const currentModIdx = activeModIdx;
+            if (hasActiveItems || s.items.length === 0) {
+                activeModIdx++;
+            }
+            return { ...s, displayIndex: currentModIdx, items: newItems };
+        });
     };
 
     const updateItem = (sectionId, itemId, patch) => {
-        setSections(prev => prev.map(s => s.id === sectionId ? { ...s, items: s.items.map(it => it.id === itemId ? { ...it, ...patch } : it) } : s));
+        setSections(prev => {
+            let next = prev.map(s => s.id === sectionId ? { ...s, items: s.items.map(it => it.id === itemId ? { ...it, ...patch } : it) } : s);
+            if (patch.activo !== undefined) next = renumberSections(next);
+            return next;
+        });
+    };
+
+    const toggleModuleActive = (sectionId, isActive) => {
+        setSections(prev => renumberSections(prev.map(s => s.id === sectionId ? { ...s, activo: isActive } : s)));
     };
 
     const updateItemByTotalVenta = (sectionId, itemId, newTotal) => {
@@ -863,26 +981,44 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
     };
 
     const addItem = (sectionId) => {
-        const it = { id: uid(), activo: true, codigo: "", equipo: "Nuevo equipo", descripcion: "", fuente: "Pendiente", utilidad: 10, qty: 1, costoUSD: 0, ventaUSD: 0 };
-        setSections(prev => prev.map(s => s.id === sectionId ? { ...s, items: [...s.items, it] } : s));
+        const it = { id: uid(), activo: true, codigo: "", equipo: "Nuevo equipo", descripcion: "", fuente: "Pendiente", utilidad: 10, kw: 0, qty: 1, costoUSD: 0, ventaUSD: 0 };
+        setSections(prev => renumberSections(prev.map(s => s.id === sectionId ? { ...s, items: [...s.items, it] } : s)));
     };
 
     const removeItem = (sectionId, itemId) => {
-        setSections(prev => prev.map(s => s.id === sectionId ? { ...s, items: s.items.filter(x => x.id !== itemId) } : s));
+        setSections(prev => renumberSections(prev.map(s => s.id === sectionId ? { ...s, items: s.items.filter(x => x.id !== itemId) } : s)));
     };
 
     const addSection = () => {
-        setSections(prev => [...prev, { id: uid(), collapsed: true, summaryDesc: "", titulo: `${prev.length + 1}. NUEVA SECCIÓN`, tag: "NEW", items: [] }]);
+        setSections(prev => renumberSections([...prev, { id: uid(), collapsed: false, activo: true, summaryDesc: "", titulo: `NUEVA SECCIÓN`, tag: "NEW", items: [] }]));
     };
 
     const removeSection = (sectionId) => {
-        if (confirm("¿Eliminar este MÓDULO completo?")) setSections(prev => prev.filter(s => s.id !== sectionId));
+        if (confirm("¿Eliminar este MÓDULO completo?")) setSections(prev => renumberSections(prev.filter(s => s.id !== sectionId)));
+    };
+
+    const moveSection = (sectionId, direction) => {
+        setSections(prev => {
+            const index = prev.findIndex(s => s.id === sectionId);
+            if (index === -1) return prev;
+            if (direction === 'up' && index === 0) return prev;
+            if (direction === 'down' && index === prev.length - 1) return prev;
+
+            const newSections = [...prev];
+            const targetIndex = direction === 'up' ? index - 1 : index + 1;
+
+            [newSections[index], newSections[targetIndex]] = [newSections[targetIndex], newSections[index]];
+
+            return renumberSections(newSections);
+        });
     };
 
     const sectionTotals = useMemo(() => sections.map(s => {
-        let c = 0, v = 0;
-        s.items.forEach(it => { if (it.activo) { const r = calcItem(it); c += r.totalCosto; v += r.totalVenta; } });
-        return { sectionId: s.id, totalCosto: c, totalVenta: v };
+        let c = 0, v = 0, k = 0;
+        if (s.activo !== false) {
+            s.items.forEach(it => { if (it.activo) { const r = calcItem(it); c += r.totalCosto; v += r.totalVenta; k += r.totalKw; } });
+        }
+        return { sectionId: s.id, totalCosto: c, totalVenta: v, totalKw: k };
     }), [sections]);
 
     const toggleAllSections = (val) => {
@@ -893,10 +1029,11 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
     const grandTotals = useMemo(() => {
         const totalCosto = sectionTotals.reduce((acc, x) => acc + x.totalCosto, 0);
         const totalVenta = sectionTotals.reduce((acc, x) => acc + x.totalVenta, 0);
+        const totalKw = sectionTotals.reduce((acc, x) => acc + (x.totalKw || 0), 0);
         const mxnSinIvaCosto = totalCosto * n(tipoCambio);
         const mxnSinIvaVenta = totalVenta * n(tipoCambio);
         return {
-            totalCosto, totalVenta,
+            totalCosto, totalVenta, totalKw,
             mxnSinIvaCosto, ivaCosto: mxnSinIvaCosto * (n(ivaPct) / 100), mxnConIvaCosto: mxnSinIvaCosto * (1 + n(ivaPct) / 100),
             mxnSinIvaVenta, ivaVenta: mxnSinIvaVenta * (n(ivaPct) / 100), mxnConIvaVenta: mxnSinIvaVenta * (1 + n(ivaPct) / 100)
         };
@@ -969,11 +1106,20 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
             items: s.items.map(it => ({ ...it, descAlign: "justify" }))
         }));
         setSections(nextSections);
-        saveToCloud({ ...sections, sections: nextSections });
+        const updatedConfig = {
+            clientName, projectName, projectDesc, projectDate,
+            mpTitle, mpSubTitle, logoUrl, heroVideoUrl, coverUrl,
+            heroVideoIsIntegrated, heroVideoScale, heroVideoBorderRadius,
+            tableFontSize, sections: nextSections
+        };
+        saveToCloud(updatedConfig);
         toast({ title: "Texto Justificado", description: "Se ha aplicado justificación a todas las descripciones del proyecto." });
     };
 
-    const handleExportPDF = () => {
+    const handleExportPDF = (config) => {
+        const isMXN = config.currency === 'MXN';
+        const tc = isMXN ? config.tc : 1;
+        const exportMoney = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: config.currency }).format(val * tc);
         const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
         const settings = pdfSettings || {
             primaryColor: '#facc15',
@@ -984,7 +1130,7 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
             logoPos: { x: 235, y: 0, width: 45, height: 25 },
             headerBox: { x: 15, y: 0, width: 95, height: 15 },
             metaPos: { x: 120, y: 3 },
-            colWidths: { item: 15, equipo: 45, desc: 85, foto: 35, qty: 15, unit: 32, total: 32 },
+            colWidths: { item: 15, equipo: 45, desc: 75, foto: 35, qty: 15, unit: 40, total: 40 },
             fontSize: 9,
             rowHeight: 25,
             showImages: true,
@@ -993,11 +1139,67 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
 
         const { headerBg, headerText, titleText, logoPos, colWidths, fontSize, rowHeight, imgSize, metaPos, headerBox, logoUrl: pdfLogoUrl } = settings;
 
-        const logoImg = new Image();
-        logoImg.src = pdfLogoUrl || logoUrl || "/solifood-logo.png";
-        logoImg.crossOrigin = "Anonymous";
+        const loadImageAsDataURL = (url, format = 'JPEG') => {
+            return new Promise((resolve) => {
+                if (!url) return resolve(null);
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                img.onload = () => {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.naturalWidth || img.width;
+                        canvas.height = img.naturalHeight || img.height;
+                        const ctx = canvas.getContext('2d');
+                        if (format === 'JPEG') {
+                            ctx.fillStyle = '#ffffff';
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        }
+                        ctx.drawImage(img, 0, 0);
+                        const mimeType = format === 'PNG' ? 'image/png' : 'image/jpeg';
+                        const dataUrl = canvas.toDataURL(mimeType, format === 'PNG' ? undefined : 0.85);
+                        resolve(dataUrl);
+                    } catch (e) {
+                        console.error("Canvas convert error", e);
+                        resolve(null);
+                    }
+                };
+                img.onerror = () => resolve(null);
+                img.src = url;
+            });
+        };
 
-        const start = () => {
+        const itemUrls = [];
+        sections.forEach(s => {
+            if (s.activo === false) return;
+            const activeItems = s.items.filter(it => it.activo);
+            activeItems.forEach(it => {
+                if (it.media_url && it.media_type !== 'video') {
+                    itemUrls.push(it.media_url);
+                }
+            });
+        });
+
+        const start = async () => {
+            const mainLogoUrl = pdfLogoUrl || logoUrl || "/solifood-logo.png";
+            const [loadedLogo, ...loadedItemImages] = await Promise.all([
+                loadImageAsDataURL(mainLogoUrl, 'PNG'),
+                ...itemUrls.map(u => loadImageAsDataURL(u, 'JPEG'))
+            ]);
+
+            const imageMap = new Map(itemUrls.map((url, idx) => [url, loadedItemImages[idx]]));
+
+            let loadedCover = null;
+            if (coverUrl && !coverUrl.toLowerCase().endsWith('.pdf')) {
+                loadedCover = await loadImageAsDataURL(coverUrl, 'JPEG');
+            }
+
+            if (loadedCover) {
+                try {
+                    doc.addImage(loadedCover, 'JPEG', 0, 0, 297, 210, undefined, 'FAST');
+                    doc.addPage();
+                } catch (e) { }
+            }
+
             const topMargin = 8;
             const drawHeader = () => {
                 doc.setFillColor(headerBg);
@@ -1023,94 +1225,530 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                 doc.text(new Date().toLocaleDateString('es-MX'), metaPos.x + 23, metaPos.y + topMargin + 10);
 
                 try {
-                    doc.addImage(logoImg, 'PNG', logoPos.x, logoPos.y + topMargin, logoPos.width, logoPos.height, undefined, 'FAST');
+                    if (loadedLogo) {
+                        doc.addImage(loadedLogo, 'PNG', logoPos.x, logoPos.y + topMargin, logoPos.width, logoPos.height, undefined, 'FAST');
+                    }
                 } catch (e) { console.error("Logo PDF Draw Error", e); }
             };
 
-            let tableData = [];
             let globalIdx = 1;
+            let firstSectionDrawn = false;
 
             sections.forEach((s, sIdx) => {
+                if (s.activo === false) return;
                 const activeItems = s.items.filter(it => it.activo);
                 if (activeItems.length === 0) return;
 
-                tableData.push([
-                    { content: `MÓDULO ${sIdx + 1}: ${s.titulo}`, colSpan: 7, styles: { fillColor: [120, 120, 120], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center', minCellHeight: 10 } }
+                if (firstSectionDrawn) {
+                    doc.addPage();
+                }
+                firstSectionDrawn = true;
+
+                const sectionTableData = [];
+                const moduleName = (s.titulo.toUpperCase().startsWith("MÓDULO") || s.titulo.toUpperCase().startsWith("MODULO"))
+                    ? s.titulo.toUpperCase()
+                    : `MÓDULO ${s.displayIndex && s.displayIndex !== "-" && String(s.displayIndex).toLowerCase() !== "undefined" ? s.displayIndex : sIdx + 1} - ${s.titulo.toUpperCase()}`;
+
+                sectionTableData.push([
+                    { content: moduleName, colSpan: 7, styles: { fillColor: settings.primaryColor, textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', minCellHeight: 10, fontSize: fontSize + 2 } }
                 ]);
 
+                if (s.subtitulo) {
+                    sectionTableData.push([
+                        { content: s.subtitulo, colSpan: 7, styles: { fillColor: [89, 89, 89], textColor: [255, 255, 255], fontStyle: 'italic', halign: 'center', minCellHeight: 8, fontSize: fontSize } }
+                    ]);
+                }
+
+                const cur = isMXN ? 'MXN' : 'USD';
                 let modSum = 0;
+                let modKw = 0;
                 activeItems.forEach(it => {
                     const r = calcItem(it);
                     modSum += r.totalVenta;
-                    tableData.push([
+                    modKw += parseKw(it.kw) * (it.qty || 1);
+                    sectionTableData.push([
                         { content: globalIdx++, styles: { textColor: settings.primaryColor, fontStyle: 'bold' } },
                         it.equipo.toUpperCase(),
-                        it.descripcion.substring(0, 350),
-                        { content: "", image: it.media_url && it.media_type !== 'video' ? it.media_url : null },
+                        { content: it.descripcion, styles: { halign: it.descAlign || 'left' } },
+                        { content: "", image: it.media_url && it.media_type !== 'video' ? imageMap.get(it.media_url) : null },
                         it.qty,
-                        money(r.ventaUnitFinal),
-                        money(r.totalVenta)
+                        `${money(r.ventaUnitFinal)} ${cur}`,
+                        `${money(r.totalVenta)} ${cur}`
                     ]);
                 });
 
-                tableData.push([
-                    { content: `SUBTOTAL MÓDULO ${sIdx + 1}`, colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', fontSize: fontSize + 2, textColor: [60, 60, 60] } },
-                    { content: money(modSum), styles: { halign: 'right', fontStyle: 'bold', fontSize: fontSize + 2, textColor: [60, 60, 60] } }
+                const titleText = (s.titulo.toUpperCase().startsWith("MÓDULO") || s.titulo.toUpperCase().startsWith("MODULO"))
+                    ? s.titulo.toUpperCase()
+                    : `MÓDULO ${s.displayIndex && s.displayIndex !== "-" && String(s.displayIndex).toLowerCase() !== "undefined" ? s.displayIndex : sIdx + 1} - ${s.titulo.toUpperCase()}`;
+
+                const subtotalKwStr = modKw > 0 ? ` (${modKw.toFixed(2)} kW)` : '';
+                sectionTableData.push([
+                    { content: `SUBTOTAL ${titleText}${subtotalKwStr}`, colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fontSize: fontSize + 1, textColor: [255, 255, 255], fillColor: [120, 120, 120], cellPadding: 4 } },
+                    { content: `${money(modSum)} ${cur}`, colSpan: 2, styles: { halign: 'right', fontStyle: 'bold', fontSize: fontSize + 1, textColor: [255, 255, 255], fillColor: [120, 120, 120], cellPadding: 4 } }
+                ]);
+
+                doc.autoTable({
+                    startY: 40,
+                    head: [['ITEM', 'EQUIPO', 'DESCRIPCIÓN', 'FOTO', 'QTY', 'UNITARIO', 'TOTAL']],
+                    body: sectionTableData,
+                    theme: 'plain',
+                    headStyles: { fillColor: settings.primaryColor, textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', minCellHeight: 12 },
+                    styles: { fontSize, cellPadding: 2, valign: 'middle', lineWidth: 0.1, minCellHeight: rowHeight },
+                    alternateRowStyles: { fillColor: [233, 233, 233] },
+                    columnStyles: {
+                        0: { halign: 'center', cellWidth: colWidths.item },
+                        1: { fontStyle: 'bold', cellWidth: colWidths.equipo },
+                        2: { cellWidth: colWidths.desc, cellPadding: { top: 3, right: 3, bottom: 6, left: 3 } },
+                        3: { halign: 'center', cellWidth: colWidths.foto },
+                        4: { halign: 'center', cellWidth: colWidths.qty },
+                        5: { halign: 'right', cellWidth: colWidths.unit },
+                        6: { halign: 'right', cellWidth: colWidths.total }
+                    },
+                    rowPageBreak: 'avoid',
+                    margin: { top: 40, left: 15, right: 15, bottom: 22 },
+                    didDrawPage: (data) => {
+                        drawHeader();
+                        doc.setFontSize(7);
+                        doc.setTextColor(180, 180, 180);
+                        doc.text(`Página ${data.pageNumber} | www.solifood.mx`, 282, 206, { align: 'right' });
+                    },
+                    didDrawCell: (data) => {
+                        if (data.section === 'body' && data.column.index === 3) {
+                            const img = sectionTableData[data.row.index]?.[3]?.image;
+                            if (img) try { doc.addImage(img, 'JPEG', data.cell.x + (data.cell.width - imgSize) / 2, data.cell.y + 2, imgSize, imgSize, undefined, 'FAST'); } catch (e) { }
+                        }
+                    }
+                });
+            });
+
+            // Add a new page for the summary
+            doc.addPage();
+            drawHeader();
+            doc.setFontSize(16);
+            doc.setTextColor(0, 0, 0);
+            doc.setFont("helvetica", "bold");
+            doc.text("RESUMEN DE INVERSIÓN TOTAL", 15, 45);
+            doc.setDrawColor(settings.primaryColor);
+            doc.setLineWidth(1.5);
+            doc.line(15, 48, 110, 48);
+
+            const summaryData = [];
+            let grandTotalOverall = 0;
+            let grandTotalKw = 0;
+
+            sections.forEach((s, sIdx) => {
+                if (s.activo === false) return;
+                const activeItems = s.items.filter(it => it.activo);
+                if (activeItems.length === 0) return;
+
+                let modSum = 0;
+                let modKw = 0;
+                activeItems.forEach(it => {
+                    const r = calcItem(it);
+                    modSum += r.totalVenta;
+                    modKw += parseKw(it.kw) * (it.qty || 1);
+                });
+
+                grandTotalOverall += modSum;
+                grandTotalKw += modKw;
+
+                const titleText = (s.titulo.toUpperCase().startsWith("MÓDULO") || s.titulo.toUpperCase().startsWith("MODULO"))
+                    ? s.titulo.toUpperCase()
+                    : `MÓDULO ${s.displayIndex && s.displayIndex !== "-" && String(s.displayIndex).toLowerCase() !== "undefined" ? s.displayIndex : sIdx + 1} - ${s.titulo.toUpperCase()}`;
+
+                summaryData.push([
+                    { content: titleText, styles: { fontStyle: 'bold' } },
+                    { content: `${money(modSum)} ${isMXN ? 'MXN' : 'USD'}`, styles: { halign: 'right', fontStyle: 'bold' } }
                 ]);
             });
 
             doc.autoTable({
-                startY: 40,
-                head: [['ITEM', 'EQUIPO', 'DESCRIPCIÓN', 'FOTO', 'QTY', 'UNITARIO', 'TOTAL']],
-                body: tableData,
-                theme: 'plain',
-                headStyles: { fillColor: settings.primaryColor, textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', minCellHeight: 12 },
-                styles: { fontSize, cellPadding: 2, valign: 'middle', lineWidth: 0.1, minCellHeight: rowHeight },
+                startY: 52,
+                head: [['MÓDULO DEL PROYECTO', 'MONTO']],
+                body: summaryData,
+                theme: 'grid',
+                headStyles: { fillColor: settings.primaryColor, textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', minCellHeight: 9, fontSize: 10, lineColor: settings.primaryColor, lineWidth: 0.1 },
+                styles: { fontSize: 9, cellPadding: 2.5, valign: 'middle', textColor: [40, 40, 40], lineColor: [220, 220, 220], lineWidth: 0.1, minCellHeight: 8 },
+                alternateRowStyles: { fillColor: [248, 248, 248] },
                 columnStyles: {
-                    0: { halign: 'center', cellWidth: colWidths.item },
-                    1: { fontStyle: 'bold', cellWidth: colWidths.equipo },
-                    2: { cellWidth: colWidths.desc },
-                    3: { halign: 'center', cellWidth: colWidths.foto },
-                    4: { halign: 'center', cellWidth: colWidths.qty },
-                    5: { halign: 'right', cellWidth: colWidths.unit },
-                    6: { halign: 'right', cellWidth: colWidths.total }
+                    0: { cellWidth: 197 },
+                    1: { cellWidth: 70, halign: 'right' }
                 },
-                rowPageBreak: 'avoid',
                 margin: { top: 40, left: 15, right: 15, bottom: 20 },
                 didDrawPage: (data) => {
                     drawHeader();
                     doc.setFontSize(7);
                     doc.setTextColor(180, 180, 180);
-                    doc.text(`Página ${data.pageNumber} | www.solifood.mx`, 282, 202, { align: 'right' });
-                },
-                didDrawCell: (data) => {
-                    if (data.section === 'body' && data.column.index === 3) {
-                        const img = tableData[data.row.index]?.[3]?.image;
-                        if (img) try { doc.addImage(img, 'JPEG', data.cell.x + (data.cell.width - imgSize) / 2, data.cell.y + 2, imgSize, imgSize, undefined, 'FAST'); } catch (e) { }
-                    }
+                    doc.text(`Resumen | Página ${data.pageNumber} | www.solifood.mx`, 282, 206, { align: 'right' });
                 }
             });
 
-            const finalY = doc.lastAutoTable.finalY + 8;
-            if (finalY < 185) {
-                const totalBoxWidth = settings.colWidths.total + settings.colWidths.unit + 30;
-                const tableRightPos = 282;
-                doc.setFillColor(0, 0, 0);
-                doc.rect(tableRightPos - totalBoxWidth, finalY, totalBoxWidth, 14, 'F');
-                doc.setTextColor(255, 255, 255);
-                doc.setFontSize(12);
-                doc.text("TOTAL GENERAL", tableRightPos - totalBoxWidth + 5, finalY + 9);
-                doc.setFontSize(16);
-                doc.text(money(grandTotals.totalVenta), tableRightPos - 5, finalY + 9, { align: 'right' });
+            let finalY = doc.lastAutoTable.finalY + 6;
+            if (finalY > 180) {
+                doc.addPage();
+                drawHeader();
+                finalY = 40;
             }
-            doc.save(`SOLIFOOD_MP_${projectName.replace(/\s+/g, '_')}.pdf`);
+
+            const totalBoxWidth = 180;
+            const tableRightPos = 282;
+            const boxHeight = grandTotalKw > 0 ? 24 : 14;
+            doc.setFillColor(89, 89, 89);
+            doc.rect(tableRightPos - totalBoxWidth, finalY, totalBoxWidth, boxHeight, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(10);
+            doc.text(`TOTAL DEL PROYECTO (${isMXN ? 'MXN' : 'USD'})`, tableRightPos - totalBoxWidth + 5, finalY + 6);
+            doc.setFontSize(7);
+            doc.setTextColor(220, 220, 220);
+            doc.text("* precios más 16% de I.V.A.", tableRightPos - totalBoxWidth + 5, finalY + 11);
+
+            doc.setFontSize(18);
+            doc.setTextColor(settings.primaryColor);
+            doc.text(`${money(grandTotalOverall)} ${isMXN ? 'MXN' : 'USD'}`, tableRightPos - 4, finalY + 10, { align: 'right' });
+
+            if (grandTotalKw > 0) {
+                doc.setFontSize(7);
+                doc.setTextColor(200, 200, 200);
+                doc.text(`CAPACIDAD INSTALADA: ${grandTotalKw.toFixed(2)} kW`, tableRightPos - 4, finalY + 17, { align: 'right' });
+                doc.text(`CONSUMO NOMINAL: ${(grandTotalKw * 0.75).toFixed(2)} kW`, tableRightPos - 4, finalY + 21, { align: 'right' });
+            }
+            if (coverUrl && coverUrl.toLowerCase().endsWith('.pdf')) {
+                try {
+                    const pdfBytes = doc.output('arraybuffer');
+                    const coverRes = await fetch(coverUrl);
+                    const coverBytes = await coverRes.arrayBuffer();
+
+                    const mergedPdf = await PDFDocument.create();
+                    const coverDoc = await PDFDocument.load(coverBytes);
+                    const mainDoc = await PDFDocument.load(pdfBytes);
+
+                    const copiedCoverPages = await mergedPdf.copyPages(coverDoc, coverDoc.getPageIndices());
+                    copiedCoverPages.forEach(page => mergedPdf.addPage(page));
+
+                    const copiedMainPages = await mergedPdf.copyPages(mainDoc, mainDoc.getPageIndices());
+                    copiedMainPages.forEach(page => mergedPdf.addPage(page));
+
+                    const finalBytes = await mergedPdf.save();
+                    const blob = new Blob([finalBytes], { type: 'application/pdf' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${config.fileName || `SOLIFOOD_MP_${projectName.replace(/\s+/g, '_')}`}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    return;
+                } catch (e) {
+                    console.error("Failed to merge cover PDF", e);
+                }
+            }
+
+            doc.save(`${config.fileName || `SOLIFOOD_MP_${projectName.replace(/\s+/g, '_')}`}.pdf`);
         };
 
-        if (logoImg.complete) start();
-        else {
-            logoImg.onload = start;
-            logoImg.onerror = () => start();
-        }
+        start();
+    };
+
+    const handleExportPDFNoPhotos = (config) => {
+        const isMXN = config.currency === 'MXN';
+        const tc = isMXN ? config.tc : 1;
+        const exportMoney = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: config.currency }).format(val * tc);
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        const settings = pdfSettings || {
+            primaryColor: '#facc15',
+            secondaryColor: '#000000',
+            headerBg: '#facc15',
+            headerText: '#000000',
+            titleText: 'DETALLE POR MÓDULO',
+            logoPos: { x: 235, y: 0, width: 45, height: 25 },
+            headerBox: { x: 15, y: 0, width: 95, height: 15 },
+            metaPos: { x: 120, y: 3 },
+            colWidths: { item: 15, equipo: 50, desc: 120, qty: 15, unit: 32, total: 32 },
+            fontSize: 9,
+            rowHeight: 12,
+            showImages: false,
+            imgSize: 0,
+        };
+
+        const { headerBg, headerText, titleText, logoPos, colWidths, fontSize, rowHeight, metaPos, headerBox, logoUrl: pdfLogoUrl } = settings;
+
+        const loadImageAsDataURL = (url, format = 'JPEG') => {
+            return new Promise((resolve) => {
+                if (!url) return resolve(null);
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                img.onload = () => {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.naturalWidth || img.width;
+                        canvas.height = img.naturalHeight || img.height;
+                        const ctx = canvas.getContext('2d');
+                        if (format === 'JPEG') {
+                            ctx.fillStyle = '#ffffff';
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        }
+                        ctx.drawImage(img, 0, 0);
+                        const mimeType = format === 'PNG' ? 'image/png' : 'image/jpeg';
+                        const dataUrl = canvas.toDataURL(mimeType, format === 'PNG' ? undefined : 0.85);
+                        resolve(dataUrl);
+                    } catch (e) {
+                        console.error("Canvas convert error", e);
+                        resolve(null);
+                    }
+                };
+                img.onerror = () => resolve(null);
+                img.src = url;
+            });
+        };
+
+        const start = async () => {
+            const mainLogoUrl = pdfLogoUrl || logoUrl || "/solifood-logo.png";
+            const loadedLogo = await loadImageAsDataURL(mainLogoUrl, 'PNG');
+
+            let loadedCover = null;
+            if (coverUrl && !coverUrl.toLowerCase().endsWith('.pdf')) {
+                loadedCover = await loadImageAsDataURL(coverUrl, 'JPEG');
+            }
+
+            if (loadedCover) {
+                try {
+                    doc.addImage(loadedCover, 'JPEG', 0, 0, 297, 210, undefined, 'FAST');
+                    doc.addPage();
+                } catch (e) { }
+            }
+
+            const topMargin = 8;
+            const drawHeader = () => {
+                doc.setFillColor(headerBg);
+                doc.rect(headerBox.x, headerBox.y + topMargin, headerBox.width, headerBox.height, 'F');
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(22);
+                doc.setTextColor(headerText);
+                doc.text(titleText, headerBox.x + (headerBox.width / 2), headerBox.y + topMargin + (headerBox.height / 2) + 4, { align: 'center' });
+
+                doc.setTextColor(40, 40, 40);
+                doc.setFontSize(8);
+                doc.setFont("helvetica", "bold");
+                doc.text("CLIENTE:", metaPos.x, metaPos.y + topMargin);
+                doc.setFont("helvetica", "normal");
+                doc.text(clientName.toUpperCase(), metaPos.x + 23, metaPos.y + topMargin);
+                doc.setFont("helvetica", "bold");
+                doc.text("PROYECTO:", metaPos.x, metaPos.y + topMargin + 5);
+                doc.setFont("helvetica", "normal");
+                doc.text(projectName.toUpperCase(), metaPos.x + 23, metaPos.y + topMargin + 5);
+                doc.setFont("helvetica", "bold");
+                doc.text("FECHA:", metaPos.x, metaPos.y + topMargin + 10);
+                doc.setFont("helvetica", "normal");
+                doc.text(new Date().toLocaleDateString('es-MX'), metaPos.x + 23, metaPos.y + topMargin + 10);
+
+                try {
+                    if (loadedLogo) {
+                        doc.addImage(loadedLogo, 'PNG', logoPos.x, logoPos.y + topMargin, logoPos.width, logoPos.height, undefined, 'FAST');
+                    }
+                } catch (e) { console.error("Logo PDF Draw Error", e); }
+            };
+
+            let globalIdx = 1;
+            let grandTotalOverall = 0;
+
+            sections.forEach((s, sIdx) => {
+                if (s.activo === false) return;
+                const activeItems = s.items.filter(it => it.activo);
+                if (activeItems.length === 0) return;
+
+                if (sIdx > 0) doc.addPage();
+
+                const tableData = [];
+                let modSum = 0;
+
+                const cur = isMXN ? 'MXN' : 'USD';
+                let modKw = 0;
+                activeItems.forEach(it => {
+                    const r = calcItem(it);
+                    modSum += r.totalVenta;
+                    grandTotalOverall += r.totalVenta;
+                    modKw += parseKw(it.kw) * (it.qty || 1);
+                    tableData.push([
+                        { content: globalIdx++, styles: { textColor: settings.primaryColor, fontStyle: 'bold' } },
+                        it.equipo.toUpperCase(),
+                        { content: it.descripcion, styles: { halign: it.descAlign || 'left' } },
+                        it.qty,
+                        it.kw ? `${it.kw} kW` : '-',
+                        `${money(r.ventaUnitFinal)} ${cur}`,
+                        `${money(r.totalVenta)} ${cur}`
+                    ]);
+                });
+
+                const titleText = (s.titulo.toUpperCase().startsWith("MÓDULO") || s.titulo.toUpperCase().startsWith("MODULO"))
+                    ? s.titulo.toUpperCase()
+                    : `MÓDULO ${s.displayIndex && s.displayIndex !== "-" && String(s.displayIndex).toLowerCase() !== "undefined" ? s.displayIndex : sIdx + 1} - ${s.titulo.toUpperCase()}`;
+
+                tableData.push([
+                    { content: `SUBTOTAL ${titleText}`, colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fontSize: 10, textColor: [255, 255, 255], fillColor: [120, 120, 120], cellPadding: 4 } },
+                    { content: modKw > 0 ? `${modKw.toFixed(2)} kW` : '-', styles: { halign: 'center', fontStyle: 'bold', fontSize: 10, textColor: [255, 255, 255], fillColor: [120, 120, 120], cellPadding: 4 } },
+                    { content: `${money(modSum)} ${cur}`, colSpan: 2, styles: { halign: 'right', fontStyle: 'bold', fontSize: 10, textColor: [255, 255, 255], fillColor: [120, 120, 120], cellPadding: 4 } }
+                ]);
+
+                const moduleName = (s.titulo.toUpperCase().startsWith("MÓDULO") || s.titulo.toUpperCase().startsWith("MODULO"))
+                    ? s.titulo.toUpperCase()
+                    : `MÓDULO ${s.displayIndex && s.displayIndex !== "-" && String(s.displayIndex).toLowerCase() !== "undefined" ? s.displayIndex : sIdx + 1} - ${s.titulo.toUpperCase()}`;
+
+                const tableHead = [
+                    [{ content: moduleName, colSpan: 7, styles: { fillColor: settings.primaryColor, textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', minCellHeight: 10, fontSize: 10 + 2 } }]
+                ];
+
+                if (s.subtitulo) {
+                    tableHead.push([{ content: s.subtitulo, colSpan: 7, styles: { fillColor: [89, 89, 89], textColor: [255, 255, 255], fontStyle: 'italic', halign: 'center', minCellHeight: 8, fontSize: 10 } }]);
+                }
+
+                tableHead.push(['ITEM', 'EQUIPO', 'DESCRIPCIÓN', 'QTY', 'KW', 'UNITARIO', 'TOTAL']);
+
+                doc.autoTable({
+                    startY: 40,
+                    head: tableHead,
+                    body: tableData,
+                    theme: 'plain',
+                    headStyles: { fillColor: settings.primaryColor, textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', minCellHeight: 12 },
+                    styles: { fontSize, cellPadding: 3, valign: 'middle', lineWidth: 0.1, minCellHeight: rowHeight },
+                    alternateRowStyles: { fillColor: [233, 233, 233] },
+                    columnStyles: {
+                        0: { halign: 'center', cellWidth: colWidths.item },
+                        1: { fontStyle: 'bold', cellWidth: colWidths.equipo },
+                        2: { cellWidth: colWidths.desc, cellPadding: { top: 3, right: 3, bottom: 6, left: 3 } },
+                        3: { halign: 'center', cellWidth: colWidths.qty },
+                        4: { halign: 'center', cellWidth: colWidths.unit },
+                        5: { halign: 'right', cellWidth: colWidths.unit },
+                        6: { halign: 'right', cellWidth: colWidths.total }
+                    },
+                    margin: { top: 40, left: 15, right: 15, bottom: 22 },
+                    didDrawPage: (data) => {
+                        drawHeader();
+                        doc.setFontSize(7);
+                        doc.setTextColor(180, 180, 180);
+                        doc.text(`Detalle | Página ${data.pageNumber} | www.solifood.mx`, 282, 206, { align: 'right' });
+                    }
+                });
+            });
+
+            // Final Summary Page
+            doc.addPage();
+            drawHeader();
+            doc.setFontSize(16);
+            doc.setTextColor(0, 0, 0);
+            doc.setFont("helvetica", "bold");
+            doc.text("RESUMEN DE INVERSIÓN TOTAL", 15, 45);
+            doc.setDrawColor(settings.primaryColor);
+            doc.setLineWidth(1.5);
+            doc.line(15, 48, 110, 48);
+
+            const summaryData = [];
+            let grandTotalKw = 0;
+            sections.forEach((s, sIdx) => {
+                if (s.activo === false) return;
+                const sectionTots = sectionTotals.find(x => x.sectionId === s.id);
+                const sTotal = sectionTots?.totalVenta || 0;
+                const sKw = sectionTots?.totalKw || 0;
+                if (sTotal > 0) {
+                    grandTotalKw += sKw;
+                    const titleText = (s.titulo.toUpperCase().startsWith("MÓDULO") || s.titulo.toUpperCase().startsWith("MODULO"))
+                        ? s.titulo.toUpperCase()
+                        : `MÓDULO ${s.displayIndex && s.displayIndex !== "-" && String(s.displayIndex).toLowerCase() !== "undefined" ? s.displayIndex : sIdx + 1} - ${s.titulo.toUpperCase()}`;
+
+                    summaryData.push([
+                        { content: titleText, styles: { fontStyle: 'bold' } },
+                        { content: `${money(sTotal)} ${isMXN ? 'MXN' : 'USD'}`, styles: { halign: 'right', fontStyle: 'bold' } }
+                    ]);
+                }
+            });
+
+            doc.autoTable({
+                startY: 52,
+                head: [['MÓDULO DEL PROYECTO', 'MONTO']],
+                body: summaryData,
+                theme: 'grid',
+                headStyles: { fillColor: settings.primaryColor, textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', minCellHeight: 9, fontSize: 10, lineColor: settings.primaryColor, lineWidth: 0.1 },
+                styles: { fontSize: 9, cellPadding: 2.5, valign: 'middle', textColor: [40, 40, 40], lineColor: [220, 220, 220], lineWidth: 0.1, minCellHeight: 8 },
+                alternateRowStyles: { fillColor: [248, 248, 248] },
+                columnStyles: {
+                    0: { cellWidth: 197 },
+                    1: { cellWidth: 70, halign: 'right' }
+                },
+                margin: { top: 40, left: 15, right: 15, bottom: 20 },
+                didDrawPage: (data) => {
+                    drawHeader();
+                    doc.setFontSize(7);
+                    doc.setTextColor(180, 180, 180);
+                    doc.text(`Resumen | Página ${data.pageNumber} | www.solifood.mx`, 282, 206, { align: 'right' });
+                }
+            });
+
+            let finalY = doc.lastAutoTable.finalY + 6;
+            if (finalY > 180) {
+                doc.addPage();
+                drawHeader();
+                finalY = 40;
+            }
+
+            const totalBoxWidth = 180;
+            const tableRightPos = 282;
+            const boxHeight = grandTotalKw > 0 ? 24 : 14;
+            doc.setFillColor(89, 89, 89);
+            doc.rect(tableRightPos - totalBoxWidth, finalY, totalBoxWidth, boxHeight, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(10);
+            doc.text(`TOTAL DEL PROYECTO (${isMXN ? 'MXN' : 'USD'})`, tableRightPos - totalBoxWidth + 5, finalY + 6);
+            doc.setFontSize(7);
+            doc.setTextColor(220, 220, 220);
+            doc.text("* precios más 16% de I.V.A.", tableRightPos - totalBoxWidth + 5, finalY + 11);
+
+            doc.setFontSize(18);
+            doc.setTextColor(settings.primaryColor);
+            doc.text(`${money(grandTotalOverall)} ${isMXN ? 'MXN' : 'USD'}`, tableRightPos - 4, finalY + 10, { align: 'right' });
+
+            if (grandTotalKw > 0) {
+                doc.setFontSize(7);
+                doc.setTextColor(200, 200, 200);
+                doc.text(`CAPACIDAD INSTALADA: ${grandTotalKw.toFixed(2)} kW`, tableRightPos - 4, finalY + 17, { align: 'right' });
+                doc.text(`CONSUMO NOMINAL: ${(grandTotalKw * 0.75).toFixed(2)} kW`, tableRightPos - 4, finalY + 21, { align: 'right' });
+            }
+
+            if (coverUrl && coverUrl.toLowerCase().endsWith('.pdf')) {
+                try {
+                    const pdfBytes = doc.output('arraybuffer');
+                    const coverRes = await fetch(coverUrl);
+                    const coverBytes = await coverRes.arrayBuffer();
+
+                    const mergedPdf = await PDFDocument.create();
+                    const coverDoc = await PDFDocument.load(coverBytes);
+                    const mainDoc = await PDFDocument.load(pdfBytes);
+
+                    const copiedCoverPages = await mergedPdf.copyPages(coverDoc, coverDoc.getPageIndices());
+                    copiedCoverPages.forEach(page => mergedPdf.addPage(page));
+
+                    const copiedMainPages = await mergedPdf.copyPages(mainDoc, mainDoc.getPageIndices());
+                    copiedMainPages.forEach(page => mergedPdf.addPage(page));
+
+                    const finalBytes = await mergedPdf.save();
+                    const blob = new Blob([finalBytes], { type: 'application/pdf' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${config.fileName || `SOLIFOOD_DETALLE_MODULOS_${projectName.replace(/\s+/g, '_')}`}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    return;
+                } catch (e) {
+                    console.error("Failed to merge cover PDF", e);
+                }
+            }
+
+            doc.save(`${config.fileName || `SOLIFOOD_DETALLE_MODULOS_${projectName.replace(/\s+/g, '_')}`}.pdf`);
+        };
+
+        start();
     };
 
     const reset = () => { if (confirm("¿Restablecer MASTER PLAN?")) { localStorage.removeItem(STORAGE_KEY); setSections(initialSections); } };
@@ -1162,6 +1800,7 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                     descripcion: row["DESCRIPCIÓN"] || "",
                     fuente: row["FUENTE"] || "LST",
                     utilidad: n(row["UTILIDAD %"] || 10),
+                    kw: parseKw(row["KW"] || row["POTENCIA"]),
                     qty: n(row["QTY"] || 1),
                     costoUSD: n(row["COSTO (USD)"] || 0),
                     ventaUSD: 0
@@ -1179,7 +1818,10 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
         reader.readAsBinaryString(file);
     };
 
-    const handleMasterExportExcel = () => {
+    const handleMasterExportExcel = (config) => {
+        const isMXN = config.currency === 'MXN';
+        const tc = isMXN ? config.tc : 1;
+        const exportMoney = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: config.currency }).format(val * tc);
         try {
             const allItems = [];
             sections.forEach(s => {
@@ -1191,10 +1833,10 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                         "EQUIPO": it.equipo,
                         "DESCRIPCIÓN": it.descripcion,
                         "QTY": it.qty,
-                        "COSTO (USD)": Number(Number(it.costoUSD || 0).toFixed(2)),
+                        [`COSTO (${config.currency})`]: Number((Number(it.costoUSD || 0) * tc).toFixed(2)),
                         "UTILIDAD %": it.utilidad,
                         "FUENTE": it.fuente || "LST",
-                        "PRECIO (USD)": precio
+                        [`PRECIO (${config.currency})`]: Number((precio * tc).toFixed(2))
                     });
                 });
             });
@@ -1202,11 +1844,50 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
             const ws = XLSX.utils.json_to_sheet(allItems);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Master Plan");
-            XLSX.writeFile(wb, `MASTER_PLAN_${new Date().toISOString().split('T')[0]}.xlsx`);
+            XLSX.writeFile(wb, `${config.fileName}.xlsx`);
             toast({ title: "Master Excel Generado", description: "Se han exportado todos los módulos." });
         } catch (err) {
             console.error(err);
             toast({ title: "Error", description: "No se pudo generar el Master Excel.", variant: "destructive" });
+        }
+    };
+
+    const handleExportActiveExcel = (config) => {
+        const isMXN = config.currency === 'MXN';
+        const tc = isMXN ? config.tc : 1;
+        const exportMoney = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: config.currency }).format(val * tc);
+        try {
+            const activeItemsData = [];
+            sections.forEach(s => {
+                if (s.activo === false) return;
+                s.items.forEach(it => {
+                    if (!it.activo) return;
+                    const r = calcItem(it);
+                    activeItemsData.push({
+                        "CÓDIGO": it.codigo,
+                        "MÓDULO": s.titulo,
+                        "EQUIPO": it.equipo,
+                        "DESCRIPCIÓN": it.descripcion,
+                        "QTY": it.qty,
+                        [`UNITARIO (${config.currency})`]: Number((Number(r.ventaUnitFinal) * tc).toFixed(2)),
+                        [`TOTAL (${config.currency})`]: Number((Number(r.totalVenta) * tc).toFixed(2))
+                    });
+                });
+            });
+
+            if (activeItemsData.length === 0) {
+                toast({ title: "Sin datos", description: "No hay ítems seleccionados para exportar." });
+                return;
+            }
+
+            const ws = XLSX.utils.json_to_sheet(activeItemsData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Listado de Equipos");
+            XLSX.writeFile(wb, `${config.fileName}.xlsx`);
+            toast({ title: "Listado Generado", description: "Se ha exportado el listado de equipos activos." });
+        } catch (err) {
+            console.error(err);
+            toast({ title: "Error", description: "No se pudo generar el Listado.", variant: "destructive" });
         }
     };
 
@@ -1218,48 +1899,285 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                 const bstr = evt.target.result;
                 const wb = XLSX.read(bstr, { type: 'binary' });
                 const ws = wb.Sheets[wb.SheetNames[0]];
+
+                // First try standard object format
                 const data = XLSX.utils.sheet_to_json(ws);
                 if (!data?.length) return;
 
-                // Group by "MODULO"
-                const groups = {};
-                data.forEach(row => {
-                    const modName = row["MODULO"] || "SIN CATEGORIA";
-                    if (!groups[modName]) groups[modName] = [];
-                    groups[modName].push(row);
-                });
+                let newSections = [];
 
-                const newSections = Object.keys(groups).map((modName, idx) => ({
-                    id: `sec_${uid()}`,
-                    collapsed: true,
-                    summaryDesc: "",
-                    titulo: cleanTitle(modName), // Apply cleanTitle here
-                    tag: modName.substring(0, 3).toUpperCase(),
-                    items: groups[modName].map(row => ({
-                        id: uid(),
-                        activo: true,
-                        codigo: String(row["NUM."] || ""),
-                        equipo: row["EQUIPO"] || "Sin nombre",
-                        descripcion: row["DESCRIPCIÓN"] || "",
-                        fuente: row["FUENTE"] || "LST",
-                        utilidad: n(row["UTILIDAD %"] || 10),
-                        qty: n(row["QTY"] || 1),
-                        costoUSD: n(row["COSTO (USD)"] || 0),
-                        ventaUSD: 0
-                    }))
-                }));
+                // Check if it's the standard export format (must have MODULO and EQUIPO columns)
+                if (data[0] && ("MODULO" in data[0]) && ("EQUIPO" in data[0])) {
+                    const groups = {};
+                    data.forEach(row => {
+                        const modName = row["MODULO"] || "SIN CATEGORIA";
+                        if (!groups[modName]) groups[modName] = [];
+                        groups[modName].push(row);
+                    });
 
-                setSections(newSections);
-                setImportedFileName(file.name);
-                localStorage.setItem("solifood_mp_imported_filename", file.name);
-                saveToCloud(newSections);
-                toast({ title: "Excel Importado y Sincronizado", description: `Se cargó y guardó en la nube: ${file.name}` });
+                    newSections = Object.keys(groups).map((modName) => ({
+                        id: `sec_${uid()}`,
+                        collapsed: true,
+                        summaryDesc: "",
+                        titulo: cleanTitle(modName),
+                        tag: modName.substring(0, 3).toUpperCase(),
+                        items: groups[modName].map(row => ({
+                            id: uid(),
+                            activo: true,
+                            codigo: String(row["NUM."] || ""),
+                            equipo: row["EQUIPO"] || "Sin nombre",
+                            descripcion: row["DESCRIPCIÓN"] || row["DESCRIPCION"] || "",
+                            fuente: row["FUENTE"] || "LST",
+                            utilidad: n(row["UTILIDAD %"] || 10),
+                            kw: parseKw(row["KW"] || row["POTENCIA"]),
+                            qty: n(row["QTY"] || 1),
+                            costoUSD: n(row["COSTO (USD)"] || 0),
+                            ventaUSD: 0
+                        }))
+                    }));
+                } else {
+                    // Custom parser for Coffee project or other formats
+                    const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+                    let currentSection = null;
+
+                    // Default column mapping in case headers aren't found
+                    let colMap = { item: 0, qty: 1, equipo: 2, capacidad: 3, descripcion: 4, kw: 5, precio: 6 };
+
+                    rows.forEach(row => {
+                        if (!row || row.length === 0) return;
+
+                        // Find the first non-empty cell in the row
+                        const firstCellIdx = row.findIndex(c => c !== undefined && c !== null && String(c).trim() !== "");
+                        if (firstCellIdx === -1) return; // empty row
+
+                        const firstCell = String(row[firstCellIdx]).trim();
+                        const cellTextUp = firstCell.toUpperCase();
+
+                        // Detect Module Header (MÓDULO 1, MODULO 2, etc.)
+                        if (cellTextUp.startsWith("MÓDULO") || cellTextUp.startsWith("MODULO")) {
+                            if (currentSection) newSections.push(currentSection);
+
+                            const titulo = cleanTitle(firstCell);
+                            currentSection = {
+                                id: `sec_${uid()}`,
+                                collapsed: true,
+                                summaryDesc: "",
+                                titulo: titulo,
+                                tag: titulo.substring(0, 3).toUpperCase(),
+                                items: []
+                            };
+                            return;
+                        }
+
+                        // Detect Base de diseño
+                        if (cellTextUp.startsWith("BASE DE DISEÑO") && currentSection) {
+                            currentSection.summaryDesc = firstCell;
+                            return;
+                        }
+
+                        // Detect Table Headers to map columns dynamically
+                        if (cellTextUp === "ITEM" || cellTextUp === "CÓDIGO" || cellTextUp === "CODIGO") {
+                            row.forEach((col, idx) => {
+                                const c = String(col || "").trim().toUpperCase();
+                                if (c === "ITEM" || c === "CÓDIGO" || c === "CODIGO") colMap.item = idx;
+                                else if (c === "QTY" || c === "CANTIDAD" || c === "CANT.") colMap.qty = idx;
+                                else if (c.includes("EQUIPO")) colMap.equipo = idx;
+                                else if (c.includes("CAPACIDAD")) colMap.capacidad = idx;
+                                else if (c.includes("DESCRIPCIÓN") || c.includes("DESCRIPCION")) colMap.descripcion = idx;
+                                else if (c === "KW" || c === "POTENCIA") colMap.kw = idx;
+                                else if (c.includes("PRECIO") || c.includes("COSTO") || c.includes("USD")) colMap.precio = idx;
+                            });
+                            return;
+                        }
+
+                        // It's a data row inside a module
+                        if (currentSection) {
+                            const itemCode = String(row[colMap.item] || "").trim();
+                            const equipo = String(row[colMap.equipo] || "").trim();
+
+                            // If there is no equipo name, it's not a valid item row
+                            if (!equipo || equipo === "-" || equipo.toUpperCase() === "EQUIPO") return;
+
+                            const qty = n(row[colMap.qty] || 1);
+                            let descripcion = String(row[colMap.descripcion] || "").trim();
+                            const capacidad = String(row[colMap.capacidad] || "").trim();
+                            const kwStr = String(row[colMap.kw] || "").trim();
+                            const kwValue = parseKw(row[colMap.kw]);
+
+                            if (capacidad && capacidad !== "-") descripcion = `Capacidad: ${capacidad}\n${descripcion}`.trim();
+                            if (kwStr && kwStr !== "-") descripcion += `\nPotencia: ${kwStr}`;
+
+                            let precioUsd = row[colMap.precio];
+                            if (typeof precioUsd === 'string') {
+                                precioUsd = Number(precioUsd.replace(/[^0-9.-]+/g, ""));
+                            }
+                            // Asignar el 10% de utilidad, por lo que costo = precio / 1.1
+                            const costoUSD = Number((n(precioUsd) / 1.1).toFixed(2));
+
+                            currentSection.items.push({
+                                id: uid(),
+                                activo: true,
+                                codigo: itemCode || "-",
+                                equipo: equipo,
+                                descripcion: descripcion,
+                                fuente: "IMPORTADO",
+                                utilidad: 10,
+                                kw: kwValue,
+                                qty: qty,
+                                costoUSD: costoUSD,
+                                ventaUSD: 0
+                            });
+                        }
+                    });
+
+                    if (currentSection) newSections.push(currentSection);
+                }
+
+                if (newSections.length > 0) {
+                    setSections(newSections);
+                    setImportedFileName(file.name);
+                    localStorage.setItem("solifood_mp_imported_filename", file.name);
+
+                    // Fire and forget save
+                    saveToCloud({
+                        clientName, projectName, projectDesc, projectDate,
+                        mpTitle, mpSubTitle, logoUrl, heroVideoUrl,
+                        heroVideoIsIntegrated, heroVideoScale, heroVideoBorderRadius,
+                        tableFontSize, sections: newSections
+                    });
+
+                    toast({ title: "Excel Importado y Sincronizado", description: `Se procesaron ${newSections.length} módulos desde: ${file.name}` });
+                } else {
+                    toast({ title: "Importación Vacía", description: "No se encontraron módulos válidos. Revisa las columnas y encabezados (debe haber filas que inicien con MÓDULO).", variant: "destructive" });
+                }
             } catch (err) {
                 console.error(err);
-                toast({ title: "Error de Importación", description: "Verifica el formato del Master Excel.", variant: "destructive" });
+                toast({ title: "Error de Importación", description: "Ocurrió un error al leer el archivo Excel.", variant: "destructive" });
             }
         };
         reader.readAsBinaryString(file);
+    };
+
+    const handleExportSingleModulePDF = (s, config) => {
+        const isMXN = config.currency === 'MXN';
+        const tc = isMXN ? config.tc : 1;
+        const exportMoney = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: config.currency }).format(val * tc);
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        const settings = pdfSettings || {
+            primaryColor: '#facc15',
+            secondaryColor: '#000000',
+            headerBg: '#facc15',
+            headerText: '#000000',
+            titleText: 'DETALLE DE MÓDULO',
+            logoPos: { x: 235, y: 0, width: 45, height: 25 },
+            headerBox: { x: 15, y: 0, width: 95, height: 15 },
+            metaPos: { x: 120, y: 3 },
+            colWidths: { item: 15, equipo: 50, desc: 120, qty: 15, unit: 32, total: 32 },
+            fontSize: 9,
+            rowHeight: 12,
+            showImages: false,
+            imgSize: 0,
+        };
+
+        const { headerBg, headerText, titleText, logoPos, colWidths, fontSize, rowHeight, metaPos, headerBox, logoUrl: pdfLogoUrl } = settings;
+
+        const logoImg = new Image();
+        logoImg.src = pdfLogoUrl || logoUrl || "/solifood-logo.png";
+        logoImg.crossOrigin = "Anonymous";
+
+        const start = () => {
+            const topMargin = 8;
+            const drawHeader = () => {
+                doc.setFillColor(headerBg);
+                doc.rect(headerBox.x, headerBox.y + topMargin, headerBox.width, headerBox.height, 'F');
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(22);
+                doc.setTextColor(headerText);
+                doc.text(titleText, headerBox.x + (headerBox.width / 2), headerBox.y + topMargin + (headerBox.height / 2) + 4, { align: 'center' });
+
+                doc.setTextColor(40, 40, 40);
+                doc.setFontSize(8);
+                doc.setFont("helvetica", "bold");
+                doc.text("CLIENTE:", metaPos.x, metaPos.y + topMargin);
+                doc.setFont("helvetica", "normal");
+                doc.text(clientName.toUpperCase(), metaPos.x + 23, metaPos.y + topMargin);
+                doc.setFont("helvetica", "bold");
+                doc.text("PROYECTO:", metaPos.x, metaPos.y + topMargin + 5);
+                doc.setFont("helvetica", "normal");
+                doc.text(projectName.toUpperCase(), metaPos.x + 23, metaPos.y + topMargin + 5);
+                doc.setFont("helvetica", "bold");
+                doc.text("FECHA:", metaPos.x, metaPos.y + topMargin + 10);
+                doc.setFont("helvetica", "normal");
+                doc.text(new Date().toLocaleDateString('es-MX'), metaPos.x + 23, metaPos.y + topMargin + 10);
+
+                try {
+                    doc.addImage(logoImg, 'PNG', logoPos.x, logoPos.y + topMargin, logoPos.width, logoPos.height, undefined, 'FAST');
+                } catch (e) { }
+            };
+
+            const activeItems = s.items.filter(it => it.activo);
+            const tableData = [];
+            let modSum = 0;
+
+            activeItems.forEach((it, idx) => {
+                const r = calcItem(it);
+                modSum += r.totalVenta;
+                tableData.push([
+                    { content: idx + 1, styles: { textColor: settings.primaryColor, fontStyle: 'bold' } },
+                    it.equipo.toUpperCase(),
+                    { content: it.descripcion, styles: { halign: it.descAlign || 'left' } },
+                    it.qty,
+                    money(r.ventaUnitFinal),
+                    money(r.totalVenta)
+                ]);
+            });
+
+            doc.autoTable({
+                startY: 40,
+                head: [['ITEM', 'EQUIPO', 'DESCRIPCIÓN', 'QTY', 'UNITARIO', 'TOTAL']],
+                body: tableData,
+                theme: 'plain',
+                headStyles: { fillColor: settings.primaryColor, textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', minCellHeight: 12 },
+                styles: { fontSize, cellPadding: 3, valign: 'middle', lineWidth: 0.1, minCellHeight: rowHeight },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 15 },
+                    1: { fontStyle: 'bold', cellWidth: 50 },
+                    2: { cellWidth: 120, cellPadding: { top: 3, right: 3, bottom: 6, left: 3 } },
+                    3: { halign: 'center', cellWidth: 15 },
+                    4: { halign: 'right', cellWidth: 32 },
+                    5: { halign: 'right', cellWidth: 32 }
+                },
+                margin: { top: 40, left: 15, right: 15, bottom: 22 },
+                didDrawPage: (data) => {
+                    drawHeader();
+                    doc.setFontSize(7);
+                    doc.setTextColor(180, 180, 180);
+                    doc.text(`Módulo: ${s.titulo} | Página ${data.pageNumber} | www.solifood.mx`, 282, 206, { align: 'right' });
+                }
+            });
+
+            let finalY = doc.lastAutoTable.finalY + 4;
+            doc.setFillColor(89, 89, 89);
+            doc.rect(190, finalY, 92, 13, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "bold");
+            doc.text(`TOTAL DEL MÓDULO`, 195, finalY + 5);
+            doc.setFontSize(7);
+            doc.setTextColor(180, 180, 180);
+            doc.text("* precios más 16% de I.V.A.", 195, finalY + 10);
+            doc.setFontSize(16);
+            doc.setTextColor(255, 255, 255);
+            doc.text(money(modSum), 282, finalY + 8, { align: 'right' });
+
+            doc.save(`SOLIFOOD_MODULO_${s.titulo.substring(0, 30).replace(/\s+/g, '_')}.pdf`);
+        };
+
+        if (logoImg.complete) start();
+        else {
+            logoImg.onload = start;
+            logoImg.onerror = () => start();
+        }
     };
 
     const handleImportExcel = (e) => {
@@ -1288,6 +2206,9 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
         e.target.value = null;
     };
 
+    const totalItems = sections.reduce((acc, sec) => acc + (sec.items ? sec.items.length : 0), 0);
+    const activeItemsCount = sections.reduce((acc, sec) => acc + (sec.items ? sec.items.filter(it => it.activo).length : 0), 0);
+
     return (
         <div className={`min-h-screen bg-black text-white px-4 md:px-8 lg:px-16 py-12 pb-32 relative ${!isSubmenuMode ? "bg-[url('https://horizons-cdn.hostinger.com/0f98fff3-e5cd-4ceb-b0fd-55d6f1d7dd5c/dcea69d21f8fa04833cff852034084fb.png')] bg-cover bg-fixed bg-center" : ""}`}>
             <div className="absolute inset-0 bg-black/90 backdrop-blur-[2px] z-0" />
@@ -1311,8 +2232,8 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                                     )}
                                     <input type="file" ref={logoRef} className="hidden" accept="image/*" onChange={(e) => handleLogoUpload(e.target.files[0])} />
                                 </div>
-                                {!isScrolled && (
-                                    <span className="text-[10px] font-black text-white bg-primary/10 px-2 py-0.5 rounded border border-primary/20 inline-block uppercase tracking-wider">VER 4.45</span>
+                                {!isScrolled && !isAdmin && (
+                                    <span className="text-[10px] font-black text-white bg-primary/10 px-2 py-0.5 rounded border border-primary/20 inline-block uppercase tracking-wider mt-2 w-max">VER 7.00</span>
                                 )}
                             </div>
                         </div>
@@ -1541,7 +2462,7 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                         {isAdmin && (
                             <>
                                 <button
-                                    onClick={handleMasterExportExcel}
+                                    onClick={() => triggerExport('excel_master')}
                                     className="px-6 py-2 bg-zinc-900 border border-green-500/30 text-green-400 hover:border-green-500/50 font-black rounded-xl text-[10px] tracking-widest uppercase transition-all flex items-center gap-2"
                                     title="Exportar TODO el Master Plan"
                                 >
@@ -1628,6 +2549,18 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                                     Justificar
                                 </button>
 
+                                <div className="relative">
+                                    <button
+                                        onClick={() => coverRef.current?.click()}
+                                        className="px-4 py-2 rounded-xl border border-indigo-500/50 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 font-black text-[10px] tracking-widest uppercase transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(99,102,241,0.1)]"
+                                        title="Subir Portada del Proyecto (PDF o PNG)"
+                                    >
+                                        {uploadingId === 'cover' ? <Loader2 size={12} className="animate-spin" /> : <ImagePlus size={12} />}
+                                        {coverUrl ? "CAMBIAR PORTADA" : "SUBIR PORTADA"}
+                                    </button>
+                                    <input type="file" ref={coverRef} className="hidden" accept="image/png,image/jpeg,application/pdf" onChange={(e) => handleCoverUpload(e.target.files[0])} />
+                                </div>
+
                                 <button
                                     onClick={() => {
                                         const inp = document.createElement('input');
@@ -1661,7 +2594,19 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                             </div>
                         )}
 
-                        <button onClick={handleExportPDF} className="px-6 py-2 bg-primary text-black font-black rounded-xl text-[10px] tracking-widest uppercase text-center flex items-center justify-center ml-auto">Exportar PDF</button>
+                        <div className="flex bg-white/5 border border-white/10 rounded-xl p-1 gap-1 ml-auto">
+                            <button onClick={() => triggerExport('excel_active')} className="px-4 py-2 bg-green-500/20 text-green-400 border border-green-500/50 font-black rounded-lg text-[9px] tracking-widest uppercase text-center flex items-center justify-center transition-all hover:bg-green-500/30">
+                                <FileSpreadsheet size={12} className="mr-1.5" /> Listado Excel
+                            </button>
+                            <div className="w-[1px] bg-white/10 my-1 mx-1" />
+                            <button onClick={() => triggerExport('pdf')} className="px-4 py-2 bg-primary text-black font-black rounded-lg text-[9px] tracking-widest uppercase text-center flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(250,204,21,0.2)]">
+                                <FileText size={12} className="mr-1.5" /> PDF (Seleccionados)
+                            </button>
+                            <div className="w-[1px] bg-white/10 my-1 mx-1" />
+                            <button onClick={() => triggerExport('pdf_nophotos')} className="px-4 py-2 bg-zinc-900 border border-white/10 text-white font-black rounded-lg text-[9px] tracking-widest uppercase text-center flex items-center justify-center transition-all hover:bg-white/10 hover:border-primary/50">
+                                PDF (Sin Fotos)
+                            </button>
+                        </div>
                         <div className="flex bg-white/5 border border-white/10 rounded-xl p-1 gap-1">
                             <button
                                 onClick={() => toggleAllSections(false)}
@@ -1680,8 +2625,84 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                             </button>
                         </div>
                         {isAdmin && <button onClick={addSection} className="px-6 py-2 bg-white/5 border border-white/10 text-white font-black rounded-xl text-[10px] tracking-widest uppercase hover:bg-white/10">+ Añadir Módulo</button>}
+                        <div className="flex bg-white/5 border border-white/10 rounded-xl p-1 gap-2 ml-4">
+                            <div className="flex items-center gap-2 px-4 py-1" title="Ítems Encendidos / Total">
+                                <div className={`w-2 h-2 rounded-full ${activeItemsCount > 0 ? 'bg-primary shadow-[0_0_10px_rgba(250,204,21,0.8)]' : 'bg-gray-600'}`} />
+                                <span className="text-[10px] font-black text-gray-400">
+                                    <span className="text-white">{activeItemsCount}</span> / {totalItems} ACTIVOS
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 </div>
+
+                {isAdmin && (
+                    <div className="mb-8 p-6 bg-zinc-950/80 border border-white/10 rounded-[2.5rem] flex flex-wrap xl:flex-nowrap gap-8 items-center justify-between backdrop-blur-xl shadow-2xl relative overflow-hidden group/kpi">
+                        <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent opacity-0 group-hover/kpi:opacity-100 transition-opacity duration-700 pointer-events-none" />
+
+                        <div className="flex flex-col gap-2 flex-[1.5] min-w-[300px] z-10">
+                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Buscador Inteligente</span>
+                            <div className="relative group">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-primary/50 group-focus-within:text-primary transition-colors" size={18} />
+                                <input
+                                    type="text"
+                                    placeholder="BUSCAR POR CÓDIGO, EQUIPO O DESCRIPCIÓN..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full bg-black border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm font-black text-white focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all placeholder:text-gray-700 uppercase tracking-wider shadow-inner"
+                                />
+                                {searchQuery && (
+                                    <button onClick={() => setSearchQuery("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors">
+                                        <X size={16} />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex gap-4 overflow-x-auto custom-scrollbar pb-2 xl:pb-0 z-10 flex-[2.5] w-full xl:w-auto">
+                            <div className="bg-black/60 border border-white/5 p-4 rounded-2xl flex flex-col min-w-[120px] shadow-inner justify-center items-center">
+                                <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">TOTAL KW</span>
+                                <span className="text-2xl font-black text-white tracking-tighter tabular-nums">{grandTotals.totalKw.toFixed(2)}</span>
+                            </div>
+                            <div className="bg-black/60 border border-white/5 p-4 rounded-2xl flex flex-col min-w-[160px] flex-1 shadow-inner">
+                                <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Costo Real (USD)</span>
+                                <span className="text-2xl font-black text-white tracking-tighter tabular-nums">{money(grandTotals.totalCosto)}</span>
+                            </div>
+                            <div className="bg-black/60 border border-white/5 p-4 rounded-2xl flex flex-col min-w-[160px] flex-1 shadow-inner">
+                                <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Costo (MXN)</span>
+                                <span className="text-xl font-black text-white tracking-tighter tabular-nums">{fmtMXN(grandTotals.mxnSinIvaCosto)}</span>
+                            </div>
+                            <div className="bg-primary/10 border border-primary/20 p-4 rounded-2xl flex flex-col min-w-[160px] flex-1 shadow-[0_0_20px_rgba(250,204,21,0.15)] relative overflow-hidden">
+                                <div className="absolute -right-4 -top-4 w-16 h-16 bg-primary/20 rounded-full blur-xl pointer-events-none" />
+                                <span className="text-[9px] font-black text-primary/80 uppercase tracking-widest mb-1 relative z-10">Utilidad (USD)</span>
+                                <span className="text-2xl font-black text-primary tracking-tighter tabular-nums relative z-10">{money(grandTotals.totalVenta - grandTotals.totalCosto)}</span>
+                            </div>
+                            <div className="bg-primary/10 border border-primary/20 p-4 rounded-2xl flex flex-col min-w-[160px] flex-1 shadow-[0_0_20px_rgba(250,204,21,0.15)] relative overflow-hidden">
+                                <div className="absolute -right-4 -top-4 w-16 h-16 bg-primary/20 rounded-full blur-xl pointer-events-none" />
+                                <span className="text-[9px] font-black text-primary/80 uppercase tracking-widest mb-1 relative z-10">Utilidad (MXN)</span>
+                                <span className="text-xl font-black text-primary tracking-tighter tabular-nums relative z-10">{fmtMXN(grandTotals.mxnSinIvaVenta - grandTotals.mxnSinIvaCosto)}</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {!isAdmin && (
+                    <div className="mb-8 p-4 bg-zinc-950/80 border border-white/10 rounded-2xl flex items-center gap-4 backdrop-blur-xl shadow-2xl">
+                        <Search className="text-gray-500 ml-2" size={18} />
+                        <input
+                            type="text"
+                            placeholder="BUSCAR EQUIPOS EN EL PROYECTO..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full bg-transparent border-none text-sm font-black text-white focus:outline-none transition-all placeholder:text-gray-700 uppercase tracking-wider"
+                        />
+                        {searchQuery && (
+                            <button onClick={() => setSearchQuery("")} className="text-gray-500 hover:text-white transition-colors mr-2">
+                                <X size={16} />
+                            </button>
+                        )}
+                    </div>
+                )}
 
                 <div className="space-y-12">
                     {sections.length === 0 && (
@@ -1714,12 +2735,12 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                     )}
                     {sections.map((s, sIdx) => {
                         const visibleCols = isAdmin
-                            ? ['item', 'equipo', 'descripcion', 'media', 'qty', 'costo', 'util', 'unitario', 'total', 'action']
-                            : ['item', 'equipo', 'descripcion', 'media', 'qty', 'unitario', 'total'];
+                            ? ['item', 'equipo', 'descripcion', 'media', 'kw', 'qty', 'costo', 'util', 'unitario', 'total', 'action']
+                            : ['item', 'equipo', 'descripcion', 'media', 'kw', 'qty', 'unitario', 'total'];
 
                         // Fallback widths to prevent layout collapse
                         const initialColWidths = {
-                            item: 80, equipo: 400, descripcion: 600, media: 120, qty: 80,
+                            item: 80, equipo: 400, descripcion: 600, media: 120, kw: 80, qty: 80,
                             costo: 120, util: 80, unitario: 120, total: 150, action: 80
                         };
 
@@ -1740,43 +2761,103 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                                             >
                                                 {s.collapsed ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
                                             </button>
-                                            <div className="flex flex-col">
+                                            {isAdmin && (
+                                                <div className="flex gap-1.5">
+                                                    <button
+                                                        onClick={() => moveSection(s.id, 'up')}
+                                                        className="w-8 h-8 rounded-lg border border-white/10 bg-black/50 text-gray-500 hover:text-white hover:border-white/30 hover:bg-white/5 flex items-center justify-center transition-all"
+                                                        title="Mover Arriba"
+                                                    >
+                                                        <ArrowUp size={14} strokeWidth={3} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => moveSection(s.id, 'down')}
+                                                        className="w-8 h-8 rounded-lg border border-white/10 bg-black/50 text-gray-500 hover:text-white hover:border-white/30 hover:bg-white/5 flex items-center justify-center transition-all"
+                                                        title="Mover Abajo"
+                                                    >
+                                                        <ArrowDown size={14} strokeWidth={3} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => toggleModuleActive(s.id, s.activo === false ? true : false)}
+                                                        className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-all ${s.activo !== false ? 'bg-primary border-primary text-black shadow-[0_0_15px_rgba(250,204,21,0.5)]' : 'bg-transparent border-white/20 text-white/10 hover:border-white/40'}`}
+                                                        title={s.activo !== false ? "Apagar Módulo" : "Encender Módulo"}
+                                                    >
+                                                        <Power size={14} strokeWidth={3} />
+                                                    </button>
+                                                </div>
+                                            )}
+                                            <div className={`flex flex-col transition-all ${s.activo === false ? 'opacity-30 line-through' : ''}`}>
                                                 {isAdmin ? (
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-xl font-black text-primary">{sIdx + 1}.</span>
+                                                    <div className="flex flex-col gap-1">
+                                                        <div className="flex items-center gap-3">
+                                                            {s.displayIndex && s.displayIndex !== "-" && String(s.displayIndex).toLowerCase() !== "undefined" && <span className="text-xl font-black text-primary">{s.displayIndex}.</span>}
+                                                            <input
+                                                                value={s.titulo}
+                                                                onChange={(e) => updateSectionTitle(s.id, e.target.value)}
+                                                                onBlur={() => saveToCloud()}
+                                                                className="bg-transparent border-b border-primary/20 text-xl font-black text-white uppercase tracking-tight focus:outline-none focus:border-primary w-[500px]"
+                                                                placeholder="TÍTULO DEL MÓDULO"
+                                                            />
+                                                        </div>
                                                         <input
-                                                            value={s.titulo}
-                                                            onChange={(e) => updateSectionTitle(s.id, e.target.value)}
-                                                            className="bg-transparent border-b border-primary/20 text-xl font-black text-white uppercase tracking-tight focus:outline-none focus:border-primary w-[500px]"
+                                                            value={s.subtitulo || ""}
+                                                            onChange={(e) => updateSectionSubtitle(s.id, e.target.value)}
+                                                            onBlur={() => saveToCloud()}
+                                                            className="bg-transparent border-b border-white/10 text-xs font-medium text-gray-400 focus:outline-none focus:border-white/30 w-[500px] italic"
+                                                            placeholder="Base de diseño: 2,000 kg/h..."
                                                         />
                                                     </div>
                                                 ) : (
-                                                    <h3 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
-                                                        <span className="text-primary">{sIdx + 1}.</span>
-                                                        {s.titulo}
-                                                    </h3>
+                                                    <div className="flex flex-col gap-1">
+                                                        <h3 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
+                                                            {s.displayIndex && s.displayIndex !== "-" && String(s.displayIndex).toLowerCase() !== "undefined" && <span className="text-primary">{s.displayIndex}.</span>}
+                                                            {s.titulo}
+                                                        </h3>
+                                                        {s.subtitulo && (
+                                                            <span className="text-xs font-medium text-gray-400 italic">
+                                                                {s.subtitulo}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 )}
-                                                <span className="text-[9px] font-black bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded uppercase tracking-widest leading-none h-4 flex items-center">{s.tag}</span>
+                                                <span className="text-[9px] font-black bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded uppercase tracking-widest leading-none h-4 flex items-center mt-1 w-max">{s.tag}</span>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-6">
                                             {s.collapsed && sectionTotals.find(x => x.sectionId === s.id) && (
-                                                <div className="flex flex-col items-end mr-2 shrink-0">
-                                                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1 opacity-50">Subtotal Módulo</span>
-                                                    <span className="text-2xl font-black text-primary tracking-tighter">
-                                                        {money(sectionTotals.find(x => x.sectionId === s.id).totalVenta)}
-                                                    </span>
+                                                <div className="flex gap-8 items-center mr-2 shrink-0">
+                                                    <div className="flex flex-col items-end">
+                                                        <span className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1 opacity-50">Total Kw</span>
+                                                        <span className="text-xl font-black text-white tracking-tighter">
+                                                            {sectionTotals.find(x => x.sectionId === s.id).totalKw.toFixed(2)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex flex-col items-end">
+                                                        <span className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1 opacity-50">Subtotal Módulo</span>
+                                                        <span className="text-2xl font-black text-primary tracking-tighter">
+                                                            {money(sectionTotals.find(x => x.sectionId === s.id).totalVenta)}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             )}
                                             {isAdmin && !s.collapsed && (
                                                 <div className="flex gap-2">
                                                     {/* Export Excel Button */}
                                                     <button
-                                                        onClick={() => handleExportSectionExcel(s)}
+                                                        onClick={() => triggerExport('excel_module', s)}
                                                         className="p-2 bg-green-500/10 border border-green-500/30 text-green-500 rounded-lg hover:bg-green-500/20 transition-colors"
-                                                        title="Exportar Formato Excel"
+                                                        title="Exportar Módulo (Excel)"
                                                     >
                                                         <Download size={16} />
+                                                    </button>
+
+                                                    {/* Export PDF Button (NEW) */}
+                                                    <button
+                                                        onClick={() => triggerExport('pdf_module', s)}
+                                                        className="p-2 bg-red-500/10 border border-red-500/30 text-red-500 rounded-lg hover:bg-red-500/20 transition-colors"
+                                                        title="Exportar Módulo (PDF)"
+                                                    >
+                                                        <FileText size={16} />
                                                     </button>
 
                                                     {/* Import Excel Button */}
@@ -1826,10 +2907,10 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                                                 {visibleCols.map(colId => {
                                                     const labels = {
                                                         item: "Item", equipo: "Equipo", descripcion: "Descripción",
-                                                        media: "FOTO / VIDEO", qty: "Qty", costo: "Costo (USD)",
+                                                        media: "FOTO / VIDEO", kw: "Kw", qty: "Qty", costo: "Costo (USD)",
                                                         util: "Util %", unitario: "Unitario (USD)", total: "Total (USD)", action: "Acc"
                                                     };
-                                                    const aligns = { media: "center", costo: "right", util: "center", unitario: "right", total: "right", action: "center" };
+                                                    const aligns = { media: "center", kw: "center", costo: "right", util: "center", unitario: "right", total: "right", action: "center" };
                                                     const w = colWidths[colId] || initialColWidths[colId] || 100;
                                                     return (
                                                         <div
@@ -1895,10 +2976,10 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                                                             {visibleCols.map(colId => {
                                                                 const labels = {
                                                                     item: "Item", equipo: "Equipo", descripcion: "Descripción",
-                                                                    media: "FOTO / VIDEO", qty: "Qty", costo: "Costo (USD)",
+                                                                    media: "FOTO / VIDEO", kw: "Kw", qty: "Qty", costo: "Costo (USD)",
                                                                     util: "Util %", unitario: "Unitario (USD)", total: "Total (USD)", action: "Acc"
                                                                 };
-                                                                const aligns = { media: "center", costo: "right", util: "center", unitario: "right", total: "right", action: "center" };
+                                                                const aligns = { media: "center", kw: "center", costo: "right", util: "center", unitario: "right", total: "right", action: "center" };
                                                                 const w = colWidths[colId] || initialColWidths[colId] || 100;
                                                                 return (
                                                                     <th
@@ -1916,7 +2997,7 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                                                     </thead>
                                                     <tbody style={{ fontSize: `${tableFontSize}px` }}>
                                                         {/* Spacer Row is no longer needed with zero-gap sticky logic */}
-                                                        {s.items.map(it => {
+                                                        {s.items.filter(it => !searchQuery || it.equipo.toLowerCase().includes(searchQuery.toLowerCase()) || it.codigo.toLowerCase().includes(searchQuery.toLowerCase()) || it.descripcion.toLowerCase().includes(searchQuery.toLowerCase())).map(it => {
                                                             const r = calcItem(it);
                                                             return (
                                                                 <tr key={it.id} className={`border-b border-white/[0.02] hover:bg-white/[0.01] transition-colors ${!it.activo && 'opacity-30'}`}>
@@ -1991,6 +3072,11 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                                                                                 </div>
                                                                             </td>
                                                                         );
+                                                                        if (colId === 'kw') return (
+                                                                            <td key={colId} style={cellStyle} className="p-4 border-r border-white/[0.02]">
+                                                                                {isAdmin ? <input type="number" value={it.kw || ''} onChange={(e) => updateItem(s.id, it.id, { kw: n(e.target.value) })} className="bg-white/5 border border-white/10 rounded px-2 py-1 text-xs font-mono text-white w-full focus:border-primary/50 outline-none text-center" /> : <span className="text-xs font-mono text-gray-300 block text-center">{it.kw || 0}</span>}
+                                                                            </td>
+                                                                        );
                                                                         if (colId === 'qty') return (
                                                                             <td key={colId} style={cellStyle} className="p-4 border-r border-white/[0.02]">
                                                                                 {isAdmin ? <input type="number" value={it.qty} onChange={(e) => updateItem(s.id, it.id, { qty: n(e.target.value) })} className="bg-white/5 border border-white/10 rounded px-2 py-1 text-xs font-mono text-white w-full focus:border-primary/50 outline-none" /> : <span className="text-xs font-mono text-gray-300">{it.qty}</span>}
@@ -2060,6 +3146,9 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                         <div className="grid grid-cols-2 gap-4 text-[11px] font-bold uppercase tracking-widest opacity-60">
                             <div>MXN s/IVA: <span className="text-white ml-2">{fmtMXN(grandTotals.mxnSinIvaVenta)}</span></div>
                             <div>IVA {ivaPct}%: <span className="text-white ml-2">{fmtMXN(grandTotals.ivaVenta)}</span></div>
+                            <div className="col-span-2 mt-4 pt-4 border-t border-white/10 flex items-center">
+                                POTENCIA TOTAL PLANTA: <span className="text-white ml-4 text-sm tabular-nums">{grandTotals.totalKw.toFixed(2)} kW</span>
+                            </div>
                         </div>
                     </div>
 
@@ -2107,6 +3196,84 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                     <p className="text-[10px] font-black uppercase tracking-[0.4em]">Solifood Center · Industrial Planning Solutions · 2024</p>
                 </div>
             </div>
+
+
+            {/* EXPORT DIALOG MODAL */}
+            <AnimatePresence>
+                {exportConfig.isOpen && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.95, opacity: 0, y: -20 }}
+                            className="bg-zinc-950/30 backdrop-blur-2xl border-t border-l border-white/20 border-b border-r border-black/50 rounded-3xl w-full max-w-md overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] shadow-white/5"
+                        >
+                            <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                                <h3 className="text-xl font-black text-primary tracking-tight">EXPORTAR DATOS</h3>
+                                <button onClick={() => setExportConfig({ ...exportConfig, isOpen: false })} className="text-gray-500 hover:text-white transition-colors">
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className="p-6 space-y-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nombre del Archivo</label>
+                                    <input
+                                        type="text"
+                                        value={exportConfig.fileName}
+                                        onChange={(e) => setExportConfig({ ...exportConfig, fileName: e.target.value.toUpperCase() })}
+                                        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm font-mono text-white focus:border-primary/50 outline-none transition-all"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Moneda</label>
+                                        <select
+                                            value={exportConfig.currency}
+                                            onChange={(e) => setExportConfig({ ...exportConfig, currency: e.target.value })}
+                                            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm font-bold text-white focus:border-primary/50 outline-none transition-all appearance-none"
+                                        >
+                                            <option value="USD" className="bg-black text-white">DÓLARES (USD)</option>
+                                            <option value="MXN" className="bg-black text-white">PESOS (MXN)</option>
+                                        </select>
+                                    </div>
+                                    <div className={`space-y-2 transition-all ${exportConfig.currency === 'USD' ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">T.C. (Pesos)</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={exportConfig.tc}
+                                            onChange={(e) => setExportConfig({ ...exportConfig, tc: Number(e.target.value) })}
+                                            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm font-mono text-white focus:border-primary/50 outline-none transition-all"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="p-6 border-t border-white/5 flex gap-3">
+                                <button
+                                    onClick={() => setExportConfig({ ...exportConfig, isOpen: false })}
+                                    className="flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-white hover:bg-white/5 transition-all"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={confirmExport}
+                                    className="flex-1 py-3 px-4 bg-primary text-black rounded-xl text-xs font-black uppercase tracking-widest shadow-[0_0_15px_rgba(250,204,21,0.2)] hover:scale-105 active:scale-95 transition-all"
+                                >
+                                    Confirmar
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Hero Video Overlay - Simplified v2.34.2 */}
             <AnimatePresence>
