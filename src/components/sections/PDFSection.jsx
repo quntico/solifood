@@ -243,24 +243,43 @@ const PDFSection = ({ isEditorMode, setIsEditorMode, activeTheme, sectionData })
 
   // --- External Export Listener ---
   useEffect(() => {
-    const handleGlobalExport = async () => {
-      console.log("Global export triggered: PDF Document");
+    const handleGlobalExport = async (e) => {
+      console.log("Global export triggered: PDF Document", e.detail);
+      const action = e.detail?.action || 'view';
       const docToExport = selectedQuotation || quotations[0];
+
       if (docToExport) {
-        toast({ title: "Descargando PDF...", description: `Iniciando descarga de: ${docToExport.name}` });
+        toast({ title: action === 'download' ? "Descargando PDF..." : "Abriendo PDF...", description: `Procesando: ${docToExport.name}` });
         const cache = await loadPdfToCache(docToExport);
+
         if (cache && cache.pdfUrl) {
-          const link = document.createElement('a');
-          link.href = cache.pdfUrl; // Use the Blob ObjectURL
-          link.setAttribute('download', `${docToExport.name}.pdf`);
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
+          if (action === 'download') {
+            try {
+              toast({ title: "Iniciando descarga...", description: "Por favor espere." });
+              const response = await fetch(cache.pdfUrl);
+              const blob = await response.blob();
+              const blobUrl = window.URL.createObjectURL(blob);
+
+              const link = document.createElement('a');
+              link.href = blobUrl;
+              link.setAttribute('download', `${docToExport.name}.pdf`);
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              window.URL.revokeObjectURL(blobUrl);
+              toast({ title: "Descarga completada", description: "El archivo se ha guardado." });
+            } catch (err) {
+              console.error("Blob download failed:", err);
+              toast({ title: "Error", description: "No se pudo descargar el archivo automáticamente.", variant: "destructive" });
+            }
+          } else {
+            window.open(cache.pdfUrl, '_blank');
+          }
         } else {
-          toast({ title: "Error", description: "No se pudo obtener el enlace de descarga.", variant: "destructive" });
+          toast({ title: "Error", description: "No se pudo obtener el enlace.", variant: "destructive" });
         }
       } else {
-        toast({ title: "No hay PDF", description: "No se encontró ningún documento PDF para descargar.", variant: "destructive" });
+        toast({ title: "No hay PDF", description: "No se encontró ningún documento PDF.", variant: "destructive" });
       }
     };
     window.addEventListener('SOLIFOOD_EXPORT_PDF_DOC', handleGlobalExport);

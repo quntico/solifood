@@ -31,10 +31,12 @@
     "clsx": "^2.0.0",
     "cmdk": "^1.0.4",
     "date-fns": "^3.6.0",
+    "file-saver": "^2.0.5",
     "framer-motion": "^10.16.4",
     "html2pdf.js": "^0.10.1",
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.2",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.292.0",
     "lz-string": "^1.5.0",
     "pdf-lib": "^1.17.1",
@@ -50,7 +52,7 @@
     "react-router-dom": "^6.23.1",
     "tailwind-merge": "^1.1.4",
     "tailwindcss-animate": "^1.0.7",
-    "uuid": "^11.0.3",
+    "uuid": "^11.1.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
