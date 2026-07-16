@@ -198,8 +198,8 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
     const [projectDate, setProjectDate] = useState(() => new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' }));
     const [logoUrl, setLogoUrl] = useState(() => quotationData?.logo || "/solifood-logo-v418.png");
 
-    const [mpTitle, setMpTitle] = useState(() => localStorage.getItem("solifood_mp_title") || "MASTER PLAN");
-    const [mpSubTitle, setMpSubTitle] = useState(() => localStorage.getItem("solifood_mp_subtitle") || "INDUSTRIAL CENTER");
+    const [mpTitle, setMpTitle] = useState(() => localStorage.getItem("solifood_mp_title") || "PLAN MAESTRO");
+    const [mpSubTitle, setMpSubTitle] = useState(() => localStorage.getItem("solifood_mp_subtitle") || "CENTRO INDUSTRIAL");
     const [heroVideoUrl, setHeroVideoUrl] = useState(() => localStorage.getItem("solifood_mp_hero_video") || "");
     const [coverUrl, setCoverUrl] = useState(() => localStorage.getItem("solifood_mp_cover") || "");
     const [isHeroVideoActive, setIsHeroVideoActive] = useState(false);
@@ -990,7 +990,7 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
     };
 
     const addSection = () => {
-        setSections(prev => renumberSections([...prev, { id: uid(), collapsed: false, activo: true, summaryDesc: "", titulo: `NUEVA SECCIÓN`, tag: "NEW", items: [] }]));
+        setSections(prev => renumberSections([...prev, { id: uid(), collapsed: false, activo: true, summaryDesc: "", titulo: `NUEVA SECCIÓN`, tag: "NUEVO", items: [] }]));
     };
 
     const removeSection = (sectionId) => {
@@ -2248,9 +2248,9 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                                 )}
                                 <h1 className={`font-black tracking-tighter uppercase leading-none mt-1 transition-all duration-500 ${isScrolled ? 'text-2xl !mt-0' : 'text-4xl md:text-6xl'}`}>
                                     {isAdmin ? (
-                                        <><span className="text-white">MASTER</span> <span className="text-primary">EDITOR</span></>
+                                        <><span className="text-white">EDITOR</span> <span className="text-primary">MAESTRO</span></>
                                     ) : (
-                                        <><span className="text-white">MASTER</span> <span className="text-primary">PLAN</span></>
+                                        <><span className="text-white">PLAN</span> <span className="text-primary">MAESTRO</span></>
                                     )}
                                 </h1>
                             </div>
@@ -2258,17 +2258,17 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                                 <div className="flex flex-wrap justify-center gap-8 mt-6 text-[11px] font-black border-t border-white/10 pt-6 w-full tracking-[0.15em] uppercase">
                                     <div className="flex items-center gap-2.5 group/meta">
                                         <Briefcase size={14} className="text-primary drop-shadow-[0_0_8px_rgba(250,204,21,0.4)]" />
-                                        <span className="text-gray-400">PROJECT:</span>
+                                        <span className="text-gray-400">PROYECTO:</span>
                                         <span className="text-white text-xs">{projectName}</span>
                                     </div>
                                     <div className="flex items-center gap-2.5 group/meta">
                                         <User size={14} className="text-primary drop-shadow-[0_0_8px_rgba(250,204,21,0.4)]" />
-                                        <span className="text-gray-400">CLIENT:</span>
+                                        <span className="text-gray-400">CLIENTE:</span>
                                         <span className="text-white text-xs">{clientName}</span>
                                     </div>
                                     <div className="flex items-center gap-2.5 group/meta">
                                         <Calendar size={14} className="text-primary drop-shadow-[0_0_8px_rgba(250,204,21,0.4)]" />
-                                        <span className="text-gray-400">DATE:</span>
+                                        <span className="text-gray-400">FECHA:</span>
                                         <span className="text-white text-xs">{projectDate}</span>
                                     </div>
                                 </div>
@@ -2421,9 +2421,9 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                                             </div>
                                         </div>
                                         <div className="space-y-6">
-                                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Hero Video Config</h4>
+                                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Video Principal</h4>
                                             <div className="flex items-center gap-4 bg-white/5 p-4 rounded-xl border border-white/10">
-                                                <span className="text-xs font-bold text-gray-400 uppercase">Input Video:</span>
+                                                <span className="text-xs font-bold text-gray-400 uppercase">Video de Entrada:</span>
                                                 <input type="file" ref={heroVideoInputRef} className="hidden" onChange={(e) => handleHeroVideoUpload(e.target.files[0])} />
                                                 <button onClick={() => heroVideoInputRef.current.click()} className="px-3 py-1 bg-blue-500 text-white rounded text-[10px] font-bold uppercase tracking-widest">Subir</button>
                                             </div>
@@ -2907,7 +2907,7 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                                                 {visibleCols.map(colId => {
                                                     const labels = {
                                                         item: "Item", equipo: "Equipo", descripcion: "Descripción",
-                                                        media: "FOTO / VIDEO", kw: "Kw", qty: "Qty", costo: "Costo (USD)",
+                                                        media: "FOTO / VIDEO", kw: "Kw", qty: "Cant", costo: "Costo (USD)",
                                                         util: "Util %", unitario: "Unitario (USD)", total: "Total (USD)", action: "Acc"
                                                     };
                                                     const aligns = { media: "center", kw: "center", costo: "right", util: "center", unitario: "right", total: "right", action: "center" };
@@ -2976,7 +2976,7 @@ export default function MasterPlan({ slug: propSlug, parentSlug, legacySlug, isS
                                                             {visibleCols.map(colId => {
                                                                 const labels = {
                                                                     item: "Item", equipo: "Equipo", descripcion: "Descripción",
-                                                                    media: "FOTO / VIDEO", kw: "Kw", qty: "Qty", costo: "Costo (USD)",
+                                                                    media: "FOTO / VIDEO", kw: "Kw", qty: "Cant", costo: "Costo (USD)",
                                                                     util: "Util %", unitario: "Unitario (USD)", total: "Total (USD)", action: "Acc"
                                                                 };
                                                                 const aligns = { media: "center", kw: "center", costo: "right", util: "center", unitario: "right", total: "right", action: "center" };

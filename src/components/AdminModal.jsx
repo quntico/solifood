@@ -631,6 +631,68 @@ const AdminModal = ({ isOpen, onClose, themes = {}, setThemes, activeTheme, setA
     }
   };
 
+  const handleRestoreClick = () => {
+    if (restoreFileInputRef.current) {
+      restoreFileInputRef.current.click();
+    }
+  };
+
+  const handleRestoreFileChange = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    setIsSaving(true);
+    toast({ title: "Iniciando Restauración", description: "Por favor no cierres la ventana..." });
+    try {
+      const { newSlug } = await restoreFromControlPointV2(file);
+      toast({ title: "Restauración Exitosa 🎉", description: `Proyecto ${newSlug} restaurado. Recargando...` });
+      setTimeout(() => window.location.reload(), 2000);
+    } catch (error) {
+      toast({ title: "Error en Restauración", description: error.message, variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+      if (event.target) event.target.value = "";
+    }
+  };
+
+  const handleGenerateControlPoint = async () => {
+    if (!themes || !activeTheme) return;
+    setIsSaving(true);
+    try {
+      toast({ title: "Generando Control Point", description: "Extrayendo DB + Storage + Config..." });
+      await generateControlPointV2(themes[activeTheme]);
+      toast({ title: "Backup Completo 🛡️", description: "Descarga iniciada." });
+    } catch (err) {
+      toast({ title: "Error en Backup", description: err.message, variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleExportProjectZip = async () => {
+    // This is the fallback simple JSON V1 export
+    if (!currentThemeData) return;
+    setIsSaving(true);
+    try {
+      const zip = new JSZip();
+      
+      // Export quotation data
+      zip.file('quotation.json', JSON.stringify(currentThemeData, null, 2));
+      
+      // Export machines (sections_config)
+      if (currentThemeData.sections_config) {
+        zip.file('machines.json', JSON.stringify(currentThemeData.sections_config, null, 2));
+      }
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      saveAs(content, `solifood_${currentThemeData.project || 'backup'}_v1.zip`);
+      toast({ title: "Exportación Exitosa", description: "Archivo V1 descargado." });
+    } catch (err) {
+      toast({ title: "Error al Exportar", description: err.message, variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (!isOpen) return null;
   // CRITICAL GUARD: Render nothing if critical data missing
   if (!currentThemeData || !themes) return null;

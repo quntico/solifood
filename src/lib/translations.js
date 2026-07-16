@@ -25,7 +25,7 @@ export default {
       login: 'Acceso SOLIFOOD'
     },
     sections: {
-      portada: 'Home',
+      portada: 'Inicio',
       descripcion: 'Descripción',
       descripcionText: 'La línea {project} es una solución de producción continua que integra cuatro áreas fundamentales: mezclado, formado, enfriamiento y empaquetado. Cada área ha sido diseñada para trabajar en sincronía perfecta, garantizando una producción fluida y eficiente de barras de cereal de alta calidad.',
       capacidades: 'Capacidades',

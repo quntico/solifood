@@ -269,7 +269,7 @@ const Header = ({
                   )}
                   <FileDown className="h-4 w-4" />
                 </div>
-                <span className="hidden sm:inline font-bold text-xs">PDF & DOCS</span>
+                <span className="hidden sm:inline font-bold text-xs">PDF Y DOCS</span>
               </Button>
 
               <LanguageSelector />
